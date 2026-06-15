@@ -91,7 +91,13 @@ fi
 #     runs it AS the pane process. 100% reliable for programmatic/detached
 #     launch (no prompt-readiness race). Tradeoff: pane closes when cmd exits.
 OUT="tmux new-session"
-[[ "$DETACHED" =~ ^(1|true|yes|on)$ ]] && OUT+=" -d"
+if [[ "$DETACHED" =~ ^(1|true|yes|on)$ ]]; then
+  OUT+=" -d"
+  # give the detached window a real size so panes fit at creation time
+  # (otherwise the default 80x24 silently hits 'no space for new pane' for 4+ panes).
+  # on attach the client resizes anyway.
+  OUT+=" -x 220 -y 56"
+fi
 OUT+=" -s $QNAME -c $QPATH"
 
 # helper: single-quote-escape a command for safe embedding
@@ -116,6 +122,7 @@ final_layout() {
   case "$1" in
     4) echo "tiled" ;;       # grid
     5) echo "main-vertical" ;; # main-3
+    7) echo "tiled" ;;       # custom (n>=4: stacking is useless, tile instead)
     *) echo "" ;;
   esac
 }

@@ -15,7 +15,7 @@
 4. **Generate the command** — you have two paths (pick by what you're doing):
    - **Handing the command to a human:** run `/generate.sh` with defaults (non-detached) — one paste drops them straight into the session, no separate attach step.
    - **Launching it yourself in the background:** add `--detached 1 --exec`. `-d` backgrounds it; `--exec` runs each command as the pane process (100% reliable, no shell-prompt timing race). Then tell the user `tmux attach -t <name>`.
-5. **Return the command** to the user, ready to paste.
+5. **Return the command verbatim.** Run the generator's output as-is. Do NOT hand-edit it or append your own tmux commands (e.g. `select-layout`, `select-pane`) — the generator already handles pane arrangement, including tiling for 5+ panes and correct window sizing for detached sessions. If the result doesn't fit your needs, change the generator FLAGS (fewer panes, a different `--layout`) and regenerate, rather than rewriting the output.
 
 That's the entire loop. No API keys, no auth, no server calls, no browser required.
 
