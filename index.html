@@ -702,20 +702,20 @@ function generate(){
 
   /* cmd0 -> initial pane (active) */
   if(state.panes[0]&&state.panes[0].trim())
-    cmd+=" \; send-keys '"+state.panes[0].trim().replace(/'/g,"'\''")+"' Enter";
+    cmd+=" \\; send-keys '"+state.panes[0].trim().replace(/'/g,"'\''")+"' Enter";
 
   /* interleaved: split-window + send-keys for panes 1..n-1 */
   const specs=splitSpec(lid,n);
   for(let i=1;i<n;i++){
     const dir=specs[i-1]||'-v';
-    cmd+=' \; split-window '+dir+' -c "#{pane_current_path}"';
+    cmd+=' \\; split-window '+dir+' -c "#{pane_current_path}"';
     const t=state.panes[i]?state.panes[i].trim():'';
-    if(t) cmd+=" \; send-keys '"+t.replace(/'/g,"'\''")+"' Enter";
+    if(t) cmd+=" \\; send-keys '"+t.replace(/'/g,"'\''")+"' Enter";
   }
 
   /* grid / main-3 get a final select-layout */
   const fl=finalLayout(lid);
-  if(fl) cmd+=' \; select-layout '+fl;
+  if(fl) cmd+=' \\; select-layout '+fl;
 
   cmd+='\n<span class="cm"># tmux attach -t '+sh(name)+'</span>';
   $('output').innerHTML=cmd;
