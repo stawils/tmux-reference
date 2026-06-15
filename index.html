@@ -15,11 +15,13 @@
 {
   "name": "tmux Workstation Builder",
   "purpose": "Compose a tmux workspace as a URL; get a ready-to-paste one-liner.",
+  "recommended_agent_path": "/generate.sh (pure bash, zero deps — fetch and run, command goes to stdout)",
   "agent_manual": "/llms.txt",
   "structured_options": "/options.json",
   "a2a_card": "/.well-known/agent-card.json",
-  "primary_interface": "URL query params — see llms.txt 'How an agent uses it'",
-  "result_element": "#output (pre tag holding the generated tmux command)"
+  "generator_script": "/generate.sh",
+  "primary_interface": "For curl/text agents: run /generate.sh. For humans/JS agents: URL query params.",
+  "result_element": "#output (pre tag holding the generated tmux command) — website only; script prints to stdout"
 }
 </script>
 
@@ -310,6 +312,10 @@ h2.kh{font-family:var(--serif);font-weight:500;font-size:20px;letter-spacing:-.0
   <div class="surfaces" id="surfaces">
     <div class="surfaces-h"><span class="t">Agent discovery surfaces</span><button class="x" onclick="toggleSurfaces(event)" aria-label="Close">&times;</button></div>
     <div class="surfaces-b">
+      <a class="surface" href="/generate.sh" style="background:var(--oat-2);border-color:var(--oat)">
+        <span class="ic" style="background:var(--olive);color:#fff"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        <span class="meta"><span class="n">/generate.sh <span style="font-size:9px;color:var(--olive-d);font-weight:700">RECOMMENDED</span></span><span class="u">/generate.sh</span><span class="d">Pure-bash generator — curl &amp; run, no browser. Zero deps.</span></span>
+      </a>
       <a class="surface" href="/llms.txt">
         <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg></span>
         <span class="meta"><span class="n">/llms.txt</span><span class="u">/llms.txt</span><span class="d">Task-oriented manual for text agents (Claude, ChatGPT)</span></span>

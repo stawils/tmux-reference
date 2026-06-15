@@ -11,15 +11,44 @@
 
 1. **Understand what the user wants** (a dev workspace? monitoring? multi-ssh?).
 2. **Explore the options** below (or fetch `/options.json` for the structured catalogue).
-3. **Compose a URL** using the scheme in "How to act".
-4. **Return the URL** to the user — opening it shows the generated command, ready to copy.
-5. *(Optional)* If you can run JS in a headless browser, open the URL and read `document.getElementById('output').textContent` to return the command text directly.
+3. **Generate the command** — you have two equivalent paths (pick based on your capabilities):
+   - **No-browser path (RECOMMENDED for text/curl agents):** fetch and run `/generate.sh`. Zero deps, pure bash. Outputs the exact command to stdout.
+   - **URL path (for humans or JS-capable agents):** compose a URL with query params and open it.
+4. **Return the command** to the user, ready to paste.
 
-That's the entire loop. No API keys, no auth, no server calls.
+That's the entire loop. No API keys, no auth, no server calls, no browser required.
 
 ---
 
-# How to act — the URL interface
+# Quick path (no browser, no deps) — for curl/text agents
+
+The generated command is fully reproducible from a small bash script. Fetch it and run it:
+
+```bash
+curl -s https://stawils.github.io/tmux-reference/generate.sh \
+  | bash -s -- --name dev --layout grid --detached 1 \
+     --panes "nvim .|cargo run|lazygit|cargo watch -x test"
+```
+
+Outputs:
+```
+tmux new-session -d -s dev -c ~/workspaces/project \; split-window -v ... \; send-keys -t 0 'nvim .' Enter ...
+# tmux attach -t dev
+```
+
+This is byte-identical to what the website generates in-browser. No Node, no Python, no browser automation — just `curl` + `bash`. Safe to read first: the script is ~120 lines of pure bash.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--name` | `dev` | tmux session name |
+| `--path` | `~/workspaces/project` | working directory |
+| `--layout` | `side-by-side` | alias or index 0–7 (see below) |
+| `--detached` | `1` | `1` adds `-d` (recommended); `0` attaches now |
+| `--panes` | `zsh` | pipe-separated commands: `--panes "nvim .|cargo run"` |
+
+---
+
+# URL path — for humans or JS-capable agents
 
 Append query params to the base URL. All optional; any subset works.
 
@@ -96,7 +125,9 @@ https://stawils.github.io/tmux-reference/?name=servers&layout=3col&panes=ssh+web
 
 # How to read the result
 
-After a URL is opened, the generated `tmux` one-liner lives in the element with `id="output"` (a `<pre>` tag). It contains the command followed by a commented attach line:
+**Via the bash script (no browser):** the command is printed directly to stdout — nothing to extract. This is the reliable path for text/curl agents.
+
+**Via the website (JS-capable agents only):** the generated `tmux` one-liner lives in the element with `id="output"` (a `<pre>` tag):
 
 ```
 tmux new-session -d -s app -c ~/workspaces/app \; split-window -h ... \; send-keys -t 0 'nvim .' Enter ...
@@ -115,6 +146,7 @@ const cmd = document.getElementById('output').textContent;
 
 Different agents look in different places. We expose several so any agent type can find us:
 
+- **`/generate.sh`** — pure-bash generator (RECOMMENDED for curl/text agents; zero deps)
 - **`/llms.txt`** — this file (text-based agents: Claude, ChatGPT)
 - **`/options.json`** — the same options as structured JSON (API-calling agents)
 - **`/.well-known/agent-card.json`** — A2A Agent Card (MCP / A2A clients)

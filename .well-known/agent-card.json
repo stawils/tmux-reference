@@ -13,11 +13,21 @@
   "defaultOutputModes": ["text"],
   "skills": [
     {
-      "name": "compose_workspace",
-      "description": "Compose a tmux workspace from layout + panes. Returns the generated one-liner and a shareable URL.",
+      "name": "generate_command",
+      "description": "Generate a tmux one-liner from layout + panes. RECOMMENDED path: fetch and run /generate.sh (pure bash, zero deps) — outputs the command to stdout. No browser needed.",
       "input": {
         "mode": "text",
-        "instructions": "Build a URL with query params: name, path, layout (alias or index), detached, panes (pipe-separated). Open it to read the generated command from element #output."
+        "instructions": "curl -s https://stawils.github.io/tmux-reference/generate.sh | bash -s -- --name NAME --layout LAYOUT --panes 'cmd1|cmd2'",
+        "script_url": "https://stawils.github.io/tmux-reference/generate.sh",
+        "flags": {"--name": "session name", "--path": "working dir", "--layout": "alias or 0-7", "--detached": "1|0", "--panes": "pipe-separated commands"}
+      }
+    },
+    {
+      "name": "compose_workspace",
+      "description": "Compose a tmux workspace as a URL (for humans or JS-capable agents). Returns a shareable URL.",
+      "input": {
+        "mode": "text",
+        "instructions": "Build a URL with query params: name, path, layout, detached, panes. Open it to read the generated command from element #output (requires JS)."
       }
     },
     {
