@@ -326,8 +326,7 @@ h2.kh{font-family:var(--serif);font-weight:500;font-size:20px;letter-spacing:-.0
   </header>
 
   <!-- ═══ VISIBLE agent signpost (plain text — survives fetch_page/reader extraction) ═══ -->
-  <!-- Do NOT make this display:none. Agents visiting the page read the rendered text; -->
-  <!-- they cannot see <head> links or hidden panels. This block is how they find llms.txt + generate.sh. -->
+  <!-- Visible <details open> signpost: renders as text so fetch-based agents find the docs. -->
   <details class="agent-signpost" id="agentSignpost" open>
     <summary class="as-h">
       <span class="as-tag">For AI agents</span>
