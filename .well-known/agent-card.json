@@ -1,0 +1,39 @@
+{
+  "name": "tmux Workstation Builder",
+  "description": "Composes a tmux workspace (layout + panes) into a ready-to-paste one-liner. Static site, no backend. State is set via URL query params, so an agent composes a link and hands it to the user.",
+  "version": "1.0",
+  "url": "https://stawils.github.io/tmux-reference/",
+  "protocol_version": "0.3",
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "stateTransition": false
+  },
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["text"],
+  "skills": [
+    {
+      "name": "compose_workspace",
+      "description": "Compose a tmux workspace from layout + panes. Returns the generated one-liner and a shareable URL.",
+      "input": {
+        "mode": "text",
+        "instructions": "Build a URL with query params: name, path, layout (alias or index), detached, panes (pipe-separated). Open it to read the generated command from element #output."
+      }
+    },
+    {
+      "name": "explore_options",
+      "description": "Discover available layouts, commands, and templates.",
+      "input": {
+        "mode": "text",
+        "instructions": "Fetch /options.json for the full structured catalogue, or /llms.txt for the human/agent-readable manual."
+      }
+    }
+  ],
+  "securitySchemes": {},
+  "authentication": {
+    "schemes": []
+  },
+  "documentationUrl": "https://stawils.github.io/tmux-reference/llms.txt",
+  "optionsUrl": "https://stawils.github.io/tmux-reference/options.json",
+  "repository": "https://github.com/stawils/tmux-reference"
+}

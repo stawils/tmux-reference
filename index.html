@@ -4,6 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tmux — Workstation Builder</title>
+
+<!-- ═══ Agent discovery: point machine readers at the canonical sources ═══ -->
+<link rel="alternate" type="text/markdown" title="Agent manual (llms.txt)" href="/llms.txt">
+<link rel="alternate" type="application/json" title="Structured options (options.json)" href="/options.json">
+<link rel="service-desc" type="application/json" title="A2A Agent Card" href="/.well-known/agent-card.json">
+
+<!-- ═══ In-page agent marker: a DOM-reading agent finds this without extra fetches ═══ -->
+<script type="application/agent+json">
+{
+  "name": "tmux Workstation Builder",
+  "purpose": "Compose a tmux workspace as a URL; get a ready-to-paste one-liner.",
+  "agent_manual": "/llms.txt",
+  "structured_options": "/options.json",
+  "a2a_card": "/.well-known/agent-card.json",
+  "primary_interface": "URL query params — see llms.txt 'How an agent uses it'",
+  "result_element": "#output (pre tag holding the generated tmux command)"
+}
+</script>
+
 <script>
 /* apply theme before paint to avoid flash */
 (function(){
@@ -908,6 +927,63 @@ renderConfig();
 syncThemeIcon();
 generate();
 if(hadParams){/* scroll output into view so deep-linked result is immediately visible */setTimeout(()=>{const o=document.querySelector('.out');if(o)o.scrollIntoView({behavior:'smooth',block:'nearest'})},250)}
+
+/* ════════════════════════════════════════════
+   WebMCP — expose in-browser tools for agents (W3C proposal).
+   Feature-detected: no-op on browsers without navigator.modelContext.
+   Chrome 149+ origin trials (Jun 2026). Costs nothing if unsupported.
+   ════════════════════════════════════════════ */
+if('modelContext' in navigator){
+  navigator.modelContext.provideContext({
+    tools:[
+      {
+        name:'list_options',
+        description:'List every layout, command, and template the builder supports. Call this first to explore what the site can do.',
+        inputSchema:{type:'object',properties:{}},
+        execute:()=>({content:[{type:'text',text:JSON.stringify({layouts:LAYOUTS.map((l,i)=>({index:i,name:l.n,alias:LAY_ALIASES_REV[i],panes:l.cells.length})),commands:PRESETS.reduce((o,[cat,items])=>(o[cat]=items.map(x=>x[0]),o),{}),templates:TEMPLATES.map(t=>({name:t.n,session:t.name,layout:LAY_ALIASES_REV[t.layout],panes:t.panes,desc:t.d}))},null,2)}]})
+      },
+      {
+        name:'compose_workspace',
+        description:'Compose a tmux workspace and return the generated one-liner plus a shareable URL. layout = alias (single|side-by-side|stacked|main-side|grid|main-3|3col|custom) or index 0-7. panes = list of commands per pane.',
+        inputSchema:{
+          type:'object',
+          properties:{
+            name:{type:'string',description:'tmux session name',default:'dev'},
+            path:{type:'string',description:'working directory',default:'~/workspaces/project'},
+            layout:{type:'string',description:'layout alias or index',default:'side-by-side'},
+            detached:{type:'boolean',description:'add -d flag (recommended)',default:true},
+            panes:{type:'array',items:{type:'string'},description:'command for each pane, in order'}
+          },
+          required:['panes']
+        },
+        execute:({name='dev',path='~/workspaces/project',layout='side-by-side',detached=true,panes})=>{
+          const idx=resolveLayout(layout);if(idx!==null)state.layout=idx;
+          state.panes=panes&&panes.length?panes:['zsh'];
+          $('bName').value=name;$('bPath').value=path;$('bDetached').checked=detached;
+          renderLayouts();renderPanes();generate();
+          const url=buildShareUrl();
+          return{content:[{type:'text',text:JSON.stringify({command:$('output').textContent,url:url,sessions:name},null,2)}]};
+        }
+      },
+      {
+        name:'apply_template',
+        description:'Apply a named starter template (fills layout + panes). name = one of: Dev workspace, Code + test, Monitoring, Git session, Research, Multi-SSH, Docker dev, Simple split.',
+        inputSchema:{
+          type:'object',
+          properties:{name:{type:'string',description:'exact template name'}},
+          required:['name']
+        },
+        execute:({name})=>{
+          const t=TEMPLATES.find(x=>x.n.toLowerCase()===String(name).toLowerCase());
+          if(!t)throw new Error('Template not found. Available: '+TEMPLATES.map(x=>x.n).join(', '));
+          loadTemplate(TEMPLATES.indexOf(t));
+          return{content:[{type:'text',text:'Applied "'+t.n+'". '+t.panes.length+' panes, layout '+LAY_ALIASES_REV[t.layout]+'. Command in #output.'}]};
+        }
+      }
+    ]
+  });
+  console.log('[WebMCP] 3 tools registered: list_options, compose_workspace, apply_template');
+}
 </script>
 </body>
 </html>

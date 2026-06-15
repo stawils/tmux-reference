@@ -1,67 +1,130 @@
 # tmux Workstation Builder
 
-> A single-page tool that turns a visual pane layout into a ready-to-paste `tmux` one-liner. No backend, no build step, no dependencies. The entire app is one HTML file. State is supplied via URL query parameters, so you (an agent) can compose a workspace as a link and hand it to the user.
+> You (an AI agent) landed here. This file is your operating manual — read it, then act. The site turns a pane layout into a ready-to-paste `tmux` command. There is no backend; the whole interface is URL query parameters. Your job: compose a URL and hand it to the user.
 
-Live URL: https://stawils.github.io/tmux-reference/
-Source: https://github.com/stawils/tmux-reference
+**Live URL:** https://stawils.github.io/tmux-reference/
+**Source:** https://github.com/stawils/tmux-reference
 
-# How an agent uses it
+---
 
-Compose a URL with query parameters. Opening it pre-fills the builder and shows the generated `tmux` command in the Output panel (and auto-copied by the user). The same URL works for humans and agents.
+# Your task
 
-## Query parameters
+1. **Understand what the user wants** (a dev workspace? monitoring? multi-ssh?).
+2. **Explore the options** below (or fetch `/options.json` for the structured catalogue).
+3. **Compose a URL** using the scheme in "How to act".
+4. **Return the URL** to the user — opening it shows the generated command, ready to copy.
+5. *(Optional)* If you can run JS in a headless browser, open the URL and read `document.getElementById('output').textContent` to return the command text directly.
 
-All optional. Any subset may be provided.
+That's the entire loop. No API keys, no auth, no server calls.
 
-- `name`    — tmux session name. Default: `dev`. Example: `name=myproject`
-- `path`    — working directory passed to `tmux -c`. Default: `~/workspaces/project`. Example: `path=~%2Fcode%2Fapp`
-- `layout`  — pane arrangement. Accepts an index (0–7) or an alias (see below). Default: `side-by-side`.
-- `detached` — `1`/`true`/`on` adds the `-d` flag (recommended; user attaches manually). `0` attaches immediately. Default: `1`.
-- `panes`   — pipe-separated commands for each pane, in order. Example: `panes=nvim+.|cargo+run|lazygit`. Spaces may be `+` or `%20`. If omitted, panes default to `zsh`.
-  - Alternative: pass individual panes as `pane0=...&pane1=...&pane2=...`.
+---
 
-## Layout aliases (for `layout=`)
+# How to act — the URL interface
 
-- `0` / `single` / `one`        — 1 pane
-- `1` / `side-by-side` / `2col` / `cols` / `horizontal` — 2 panes, left + right
-- `2` / `stacked` / `2row` / `rows` / `vertical`       — 2 panes, top + bottom
-- `3` / `main-side` / `main+side` / `main-vertical`    — wide main pane + narrow side
-- `4` / `grid` / `2x2` / `quad`                        — 2×2 grid (4 panes)
-- `5` / `main-3` / `main+3`                            — main pane + 3
-- `6` / `3col` / `3columns`                            — 3 columns
-- `7` / `custom` / `dynamic`                           — free-form (use any pane count)
+Append query params to the base URL. All optional; any subset works.
 
-## Example links
+| Param | Type | Default | Meaning |
+|---|---|---|---|
+| `name` | string | `dev` | tmux session name |
+| `path` | string | `~/workspaces/project` | working directory (`tmux -c`) |
+| `layout` | alias or 0–7 | `side-by-side` | pane arrangement (see below) |
+| `detached` | bool | `1` | `1`/`true`/`on` adds `-d` (recommended); `0` attaches now |
+| `panes` | string | `zsh` | pipe-separated commands: `panes=nvim+.|cargo+run` |
+| `pane0` `pane1` … | string | — | alternative: one param per pane |
 
-A 4-pane Rust dev workspace:
+**Encoding:** spaces may be `+` or `%20`. Pipe `|` separates panes. `name`/`path` with special chars should be URL-encoded.
+
+## Layout values (for `layout=`)
+
+Accepts an **index** (0–7) **or** an **alias** (case-insensitive):
+
+| Alias | Idx | Panes | Shape |
+|---|---|---|---|
+| `single` | 0 | 1 | one pane |
+| `side-by-side` / `2col` / `cols` / `horizontal` | 1 | 2 | left + right |
+| `stacked` / `2row` / `rows` / `vertical` | 2 | 2 | top + bottom |
+| `main-side` / `main+side` / `main-vertical` | 3 | 2 | wide main + narrow side |
+| `grid` / `2x2` / `quad` | 4 | 4 | 2×2 grid |
+| `main-3` / `main+3` | 5 | 4 | main pane + 3 |
+| `3col` / `3columns` | 6 | 3 | three columns |
+| `custom` / `dynamic` | 7 | any | free-form (use any pane count) |
+
+---
+
+# Explore — what you can put in panes
+
+These are the curated command vocabulary (chips in the UI). Anything works in `panes=`, but these are the common, well-tested ones:
+
+- **Editors:** `nvim .`, `code .`, `hx .`, `vim .`
+- **Test:** `cargo watch -x test`, `cargo test`, `vitest`, `pytest -x`, `go test ./...`, `jest --watch`, `npm test`
+- **Git:** `lazygit`, `tig`, `git log --oneline -20`, `git status`, `git diff`
+- **Monitor:** `htop`, `btop`, `journalctl -f`, `docker logs -f --tail 50`, `docker compose logs -f`, `nethogs`, `iftop`, `iostat -x 2`
+- **Remote:** `ssh user@host`, `ssh -t tmux attach`, `mosh user@host`, `kubectl logs -f deploy/app`
+- **Run:** `make run`, `cargo run`, `npm run dev`, `go run .`, `docker compose up`, `python main.py`
+- **Shell:** `zsh`, `bash`, `fish`, `clear`, `ls -la`, `make`
+
+## Starter templates (load these patterns)
+
+| Template | Session | Layout | Panes |
+|---|---|---|---|
+| Dev workspace | `dev` | `grid` | `nvim .`, `cargo run`, `lazygit`, `cargo watch -x test` |
+| Code + test | `code` | `side-by-side` | `nvim .`, `cargo watch -x test` |
+| Monitoring | `mon` | `grid` | `htop`, `journalctl -f`, `nethogs`, `iostat -x 2` |
+| Git session | `git` | `main-side` | `lazygit`, `nvim .` |
+| Research | `research` | `grid` | `nvim notes.md`, `man tmux`, `zsh`, `btop` |
+| Multi-SSH | `servers` | `3col` | `ssh web1`, `ssh web2`, `ssh db1` |
+| Docker dev | `docker` | `grid` | `nvim .`, `docker compose up`, `docker compose logs -f`, `zsh` |
+| Simple split | `work` | `side-by-side` | `zsh`, `zsh` |
+
+---
+
+# Example links (copy-paste ready)
+
+**4-pane Rust dev workspace:**
 https://stawils.github.io/tmux-reference/?name=app&path=~%2Fworkspaces%2Fapp&layout=grid&detached=1&panes=nvim+.|cargo+run|lazygit|cargo+watch+-x+test
 
-A simple editor + terminal split:
+**Editor + terminal split:**
 https://stawils.github.io/tmux-reference/?name=dev&layout=side-by-side&panes=nvim+.|zsh
 
-Three SSH sessions side by side:
+**Three SSH sessions:**
 https://stawils.github.io/tmux-reference/?name=servers&layout=3col&panes=ssh+web1|ssh+web2|ssh+db1
 
-# How to read the generated command
+**Resend template** (replace `{...}`):
+`https://stawils.github.io/tmux-reference/?name={name}&path={path}&layout={layout}&detached=1&panes={pane0}|{pane1}|{pane2}`
 
-After a URL is opened, the generated `tmux` one-liner appears inside the element with `id="output"` (a `<pre>` tag). If you can execute JS (headless browser), load the URL and read `document.getElementById('output').textContent`. The text contains the command followed by a commented attach line:
+---
+
+# How to read the result
+
+After a URL is opened, the generated `tmux` one-liner lives in the element with `id="output"` (a `<pre>` tag). It contains the command followed by a commented attach line:
 
 ```
 tmux new-session -d -s app -c ~/workspaces/app \; split-window -h ... \; send-keys -t 0 'nvim .' Enter ...
 # tmux attach -t app
 ```
 
-# Command vocabulary (common values for `panes=`)
+If you can execute JavaScript (headless browser / Playwright):
+```js
+// navigate to the composed URL, then:
+const cmd = document.getElementById('output').textContent;
+```
 
-Editors: `nvim .`, `code .`, `hx .`, `vim .`
-Test:    `cargo watch -x test`, `vitest`, `pytest -x`, `go test ./...`, `jest --watch`
-Git:     `lazygit`, `tig`, `git log --oneline -20`, `git status`
-Monitor: `htop`, `btop`, `journalctl -f`, `docker logs -f --tail 50`, `nethogs`
-Run:     `cargo run`, `npm run dev`, `go run .`, `docker compose up`, `python main.py`, `make run`
-Shell:   `zsh`, `bash`, `fish`, `clear`
+---
 
-# Other content on the page
+# Other discovery surfaces on this site
 
-The same page has two additional tabs with reference material (also useful to you):
-- **Key Reference** — tmux keybindings (prefix is Ctrl+a)
+Different agents look in different places. We expose several so any agent type can find us:
+
+- **`/llms.txt`** — this file (text-based agents: Claude, ChatGPT)
+- **`/options.json`** — the same options as structured JSON (API-calling agents)
+- **`/.well-known/agent-card.json`** — A2A Agent Card (MCP / A2A clients)
+- **`<script type="application/agent+json">`** in the HTML — in-page marker (DOM-reading agents)
+- **`navigator.modelContext`** — WebMCP in-browser tools: `list_options`, `compose_workspace`, `apply_template` (Chrome 149+)
+
+---
+
+# Other content (reference tabs)
+
+The page also has two reference tabs you may find useful:
+- **Key Reference** — tmux keybindings (prefix is `Ctrl+a`)
 - **Configuration** — copy-paste `~/.tmux.conf` snippets (prefix, general, mouse, Catppuccin status bar, vi copy mode, splits)

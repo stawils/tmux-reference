@@ -1,0 +1,54 @@
+{
+  "tool": "tmux Workstation Builder",
+  "version": 1,
+  "description": "Turns a pane layout into a ready-to-paste tmux one-liner. Static page, no backend. State is set entirely via URL query params.",
+  "base_url": "https://stawils.github.io/tmux-reference/",
+  "manual": "https://stawils.github.io/tmux-reference/llms.txt",
+  "how_to_read_result": "Open the composed URL in a browser; the generated tmux command appears in the element with id=\"output\". If you run JS (headless browser), read document.getElementById('output').textContent after load.",
+
+  "url_scheme": {
+    "summary": "GET base_url with any of these query params (all optional). Panes are pipe-separated; encode spaces as + or %20.",
+    "params": {
+      "name":    { "type": "string", "default": "dev", "desc": "tmux session name" },
+      "path":    { "type": "string", "default": "~/workspaces/project", "desc": "working directory passed to tmux -c" },
+      "layout":  { "type": "string|int", "default": "side-by-side", "desc": "index 0-7 or alias (see layouts[].alias below)" },
+      "detached":{ "type": "bool",   "default": true, "desc": "1/true/on adds -d (recommended); 0 attaches immediately" },
+      "panes":   { "type": "string", "default": "zsh", "desc": "commands for each pane, pipe-separated: panes=nvim+.|cargo+run" },
+      "pane0..pane11": { "type": "string", "desc": "alternative: pass panes individually as pane0=...&pane1=..." }
+    }
+  },
+
+  "resend_template": "https://stawils.github.io/tmux-reference/?name={name}&path={path}&layout={layout}&detached=1&panes={pane0}|{pane1}|{pane2}",
+
+  "layouts": [
+    { "index": 0, "alias": "single",          "name": "Single",        "panes": 1 },
+    { "index": 1, "alias": "side-by-side",    "name": "Side by side",  "panes": 2, "also_accepts": ["2col","cols","horizontal"] },
+    { "index": 2, "alias": "stacked",         "name": "Stacked",       "panes": 2, "also_accepts": ["2row","rows","vertical"] },
+    { "index": 3, "alias": "main-side",       "name": "Main + side",   "panes": 2, "also_accepts": ["main+side","main-vertical"] },
+    { "index": 4, "alias": "grid",            "name": "2x2 grid",      "panes": 4, "also_accepts": ["2x2","quad"] },
+    { "index": 5, "alias": "main-3",          "name": "Main + 3",      "panes": 4, "also_accepts": ["main+3"] },
+    { "index": 6, "alias": "3col",            "name": "3 columns",     "panes": 3, "also_accepts": ["3columns"] },
+    { "index": 7, "alias": "custom",          "name": "Custom",        "panes": "any", "also_accepts": ["dynamic"] }
+  ],
+
+  "commands": {
+    "Editors":  ["nvim .", "code .", "hx .", "vim .", "nano ."],
+    "Test":     ["cargo watch -x test", "cargo test", "vitest", "pytest -x", "go test ./...", "jest --watch", "npm test"],
+    "Git":      ["lazygit", "tig", "git log --oneline -20", "git status", "git diff"],
+    "Monitor":  ["htop", "btop", "journalctl -f", "docker logs -f --tail 50", "docker compose logs -f", "nethogs", "iftop", "iostat -x 2"],
+    "Remote":   ["ssh user@host", "ssh -t tmux attach", "mosh user@host", "kubectl logs -f deploy/app"],
+    "Run":      ["make run", "cargo run", "npm run dev", "go run .", "docker compose up", "python main.py"],
+    "Shell":    ["zsh", "bash", "fish", "clear", "ls -la", "make"]
+  },
+
+  "templates": [
+    { "name": "Dev workspace", "session": "dev",      "layout": "grid",         "panes": ["nvim .", "cargo run", "lazygit", "cargo watch -x test"], "desc": "Editor, build, git, tests in a grid." },
+    { "name": "Code + test",   "session": "code",     "layout": "side-by-side", "panes": ["nvim .", "cargo watch -x test"],                       "desc": "Editor beside a live test watcher." },
+    { "name": "Monitoring",    "session": "mon",      "layout": "grid",         "panes": ["htop", "journalctl -f", "nethogs", "iostat -x 2"],       "desc": "Process, system, network, disk." },
+    { "name": "Git session",   "session": "git",      "layout": "main-side",    "panes": ["lazygit", "nvim ."],                                      "desc": "lazygit wide, editor narrow." },
+    { "name": "Research",      "session": "research", "layout": "grid",         "panes": ["nvim notes.md", "man tmux", "zsh", "btop"],              "desc": "Notes, man page, scratch, monitor." },
+    { "name": "Multi-SSH",     "session": "servers",  "layout": "3col",         "panes": ["ssh web1", "ssh web2", "ssh db1"],                       "desc": "Three servers side by side." },
+    { "name": "Docker dev",    "session": "docker",   "layout": "grid",         "panes": ["nvim .", "docker compose up", "docker compose logs -f", "zsh"], "desc": "Editor, compose, logs, shell." },
+    { "name": "Simple split",  "session": "work",     "layout": "side-by-side", "panes": ["zsh", "zsh"],                                           "desc": "Two plain shells." }
+  ]
+}
