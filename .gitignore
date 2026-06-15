@@ -4,3 +4,7 @@ node_modules/
 .env
 .vscode/
 .idea/
+PANE_A
+PANE_B
+PANE_C
+PANE_D
