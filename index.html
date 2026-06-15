@@ -84,6 +84,23 @@ h1{font-family:var(--serif);font-weight:500;font-size:32px;letter-spacing:-.015e
 .theme-btn:hover{border-color:var(--clay);color:var(--clay);box-shadow:0 0 0 3px rgba(217,119,87,.1)}
 .theme-btn svg{width:16px;height:16px}
 
+/* ═══ agent signpost (VISIBLE plain text — survives fetch/reader extraction) ═══ */
+/* Not display:none. Humans can collapse it, but agents fetching raw HTML/text always see it. */
+.agent-signpost{background:var(--gray-50);border:1px solid var(--gray-200);border-left:3px solid var(--olive);border-radius:var(--r);padding:14px 18px;margin:0 0 24px;font-family:var(--mono);font-size:12px;line-height:1.7;color:var(--gray-800);position:relative}
+.agent-signpost .as-h{display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;user-select:none}
+.agent-signpost .as-h .as-tag{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#fff;background:var(--olive);padding:2px 8px;border-radius:4px;font-weight:700;font-family:var(--sans)}
+.agent-signpost .as-h .as-t{font-family:var(--sans);font-size:13px;font-weight:600;color:var(--slate)}
+.agent-signpost .as-h .as-chev{margin-left:auto;color:var(--gray-400);transition:transform .15s;font-size:11px}
+.agent-signpost.collapsed .as-chev{transform:rotate(-90deg)}
+.agent-signpost.collapsed .as-body{display:none}
+.agent-signpost .as-body{display:block}
+.agent-signpost p{margin:0 0 6px}
+.agent-signpost code{background:var(--white);border:1px solid var(--gray-200);border-radius:4px;padding:1px 6px;font-size:11.5px;color:var(--clay-d)}
+.agent-signpost a{color:var(--clay-d);text-decoration:none;border-bottom:1px dotted var(--clay)}
+.agent-signpost a:hover{color:var(--clay-d);border-bottom-style:solid}
+.agent-signpost .as-example{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--r-sm);padding:10px 12px;margin-top:8px;font-size:11px;color:var(--gray-600);white-space:pre-wrap;word-break:break-all}
+.agent-signpost .as-example b{color:var(--olive-d)}
+
 /* ═══ agent-ready badge (CUA screenshot target + human hint) ═══ */
 .hdr-btns{display:flex;gap:8px;align-items:flex-start}
 .agent-badge{appearance:none;border:2px solid var(--olive-d);background:var(--olive);color:#fff;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.04em;padding:7px 12px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .15s;white-space:nowrap;height:38px;box-shadow:0 0 0 4px rgba(120,140,93,.18)}
@@ -307,6 +324,25 @@ h2.kh{font-family:var(--serif);font-weight:500;font-size:20px;letter-spacing:-.0
       </button>
     </div>
   </header>
+
+  <!-- ═══ VISIBLE agent signpost (plain text — survives fetch_page/reader extraction) ═══ -->
+  <!-- Do NOT make this display:none. Agents visiting the page read the rendered text; -->
+  <!-- they cannot see <head> links or hidden panels. This block is how they find llms.txt + generate.sh. -->
+  <details class="agent-signpost" id="agentSignpost" open>
+    <summary class="as-h">
+      <span class="as-tag">For AI agents</span>
+      <span class="as-t">You can use this tool programmatically — no browser needed</span>
+      <span class="as-chev">▾</span>
+    </summary>
+    <div class="as-body">
+      <p><b>1. Read the manual:</b> <a href="/llms.txt">/llms.txt</a> — task-oriented instructions for agents.</p>
+      <p><b>2. Generate a tmux command</b> (pure bash, zero deps, no browser):
+         <a href="/generate.sh">/generate.sh</a> — use <code>--exec</code> for reliable detached launch.</p>
+      <p><b>3. Structured options:</b> <a href="/options.json">/options.json</a> (layouts, commands, templates).</p>
+      <div class="as-example"><b>curl -s</b> https://stawils.github.io/tmux-reference/generate.sh \
+  | bash -s -- --name dev --layout grid --exec --panes "nvim .|cargo run|lazygit|zsh"</div>
+    </div>
+  </details>
 
   <!-- agent discovery surfaces panel (revealed by badge) -->
   <div class="surfaces" id="surfaces">
