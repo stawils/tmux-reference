@@ -11,9 +11,9 @@
 set -euo pipefail
 
 NAME="dev"
-PATH_DIR="~/workspaces/project"
+PATH_DIR="."            # default to current dir (always exists; agents should pass --path)
 LAYOUT="side-by-side"
-DETACHED=1
+DETACHED=0              # default non-detached: one command drops you in (no attach step)
 PANES=""
 EXEC=0
 
@@ -72,6 +72,16 @@ quote_if_needed() {
 }
 QNAME=$(quote_if_needed "$NAME")
 QPATH=$(quote_if_needed "$PATH_DIR")
+
+# ── safety check: warn loudly if --path doesn't exist (silent failures are worse than noise) ──
+# (don't block — the user/agent may intend a relative path or a dir that will be created. Just warn.)
+if [[ "$PATH_DIR" != "." && "$PATH_DIR" != "$PWD" ]]; then
+  EXPANDED="${PATH_DIR/#\~/$HOME}"
+  if [[ ! -d "$EXPANDED" ]]; then
+    echo "# WARNING: --path '$PATH_DIR' does not exist. tmux -c will land panes in a broken cwd." >&2
+    echo "#          Detect the real project dir (pwd, ls) or use --path . for the current directory." >&2
+  fi
+fi
 
 # ── build command (base-index agnostic: never addresses panes by index) ──
 # Two modes:

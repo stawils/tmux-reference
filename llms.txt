@@ -10,11 +10,12 @@
 # Your task
 
 1. **Understand what the user wants** (a dev workspace? monitoring? multi-ssh?).
-2. **Explore the options** below (or fetch `/options.json` for the structured catalogue).
-3. **Generate the command** — you have two equivalent paths (pick based on your capabilities):
-   - **No-browser path (RECOMMENDED for text/curl agents):** fetch and run `/generate.sh`. Zero deps, pure bash. Outputs the exact command to stdout.
-   - **URL path (for humans or JS-capable agents):** compose a URL with query params and open it.
-4. **Return the command** to the user, ready to paste.
+2. **CRITICAL — set `--path` to a REAL directory.** Detect the user's project path: run `pwd`, `ls ~/workspaces/`, or look for the repo they named. **Never emit a placeholder path** like `~/workspaces/project` — tmux `-c` to a nonexistent dir creates the session with a broken working directory (panes land in `/` or silently fail). If you genuinely don't know the path, use `--path .` (current directory) OR ask the user before generating. Do not hand the user a command with a path you haven't verified exists.
+3. **Explore the options** below (or fetch `/options.json` for the structured catalogue).
+4. **Generate the command** — you have two paths (pick by what you're doing):
+   - **Handing the command to a human:** run `/generate.sh` with defaults (non-detached) — one paste drops them straight into the session, no separate attach step.
+   - **Launching it yourself in the background:** add `--detached 1 --exec`. `-d` backgrounds it; `--exec` runs each command as the pane process (100% reliable, no shell-prompt timing race). Then tell the user `tmux attach -t <name>`.
+5. **Return the command** to the user, ready to paste.
 
 That's the entire loop. No API keys, no auth, no server calls, no browser required.
 
@@ -22,28 +23,34 @@ That's the entire loop. No API keys, no auth, no server calls, no browser requir
 
 # Quick path (no browser, no deps) — for curl/text agents
 
-The generated command is fully reproducible from a small bash script. Fetch it and run it. **For programmatic/detached launch, add `--exec`** — it passes each command directly to tmux as the pane process, so it's 100% reliable with no shell-prompt timing race (this is the mode agents should use when actually launching):
+The generated command is fully reproducible from a small bash script. Fetch it and run it.
 
-```bash
-curl -s https://stawils.github.io/tmux-reference/generate.sh \
-  | bash -s -- --name dev --layout grid --detached 1 --exec \
-     --panes "nvim .|cargo run|lazygit|cargo watch -x test"
-```
+**Two modes — pick by what you're doing:**
 
-Outputs:
-```
-tmux new-session -d -s dev -c ~/workspaces/project 'nvim .' \; split-window -v ... 'cargo run' \; select-layout tiled
-# tmux attach -t dev
-```
+- **Handing the command to a HUMAN** (default): drop the flags. Output is a single command that creates the session AND drops them straight in (no separate attach step):
+  ```bash
+  curl -s https://stawils.github.io/tmux-reference/generate.sh \
+    | bash -s -- --name dev --layout grid \
+       --panes "nvim .|cargo run|lazygit|cargo watch -x test"
+  ```
+  → `tmux new-session -s dev -c . 'nvim .' \; split-window ...` (one paste, they're in)
 
-This is byte-identical to what the website generates in-browser. No Node, no Python, no browser automation — just `curl` + `bash`. Safe to read first: the script is pure bash.
+- **Launching programmatically / in the background** (agent run-it-yourself): add `--detached 1 --exec`. `-d` backgrounds it; `--exec` runs each command as the pane process (100% reliable, no shell-prompt timing race):
+  ```bash
+  curl -s https://stawils.github.io/tmux-reference/generate.sh \
+    | bash -s -- --name dev --layout grid --detached 1 --exec \
+       --panes "nvim .|cargo run|lazygit|cargo watch -x test"
+  ```
+  → `tmux new-session -d -s dev -c . 'nvim .' \; ...` then tell the user `tmux attach -t dev`
+
+No Node, no Python, no browser automation — just `curl` + `bash`. Safe to read first: the script is pure bash.
 
 | Flag | Default | Meaning |
 |---|---|---|
 | `--name` | `dev` | tmux session name |
 | `--path` | `~/workspaces/project` | working directory |
 | `--layout` | `side-by-side` | alias or index 0–7 (see below) |
-| `--detached` | `1` | `1` adds `-d` (recommended); `0` attaches now |
+| `--detached` | `0` | `1` adds `-d` (background — agents use this + `--exec`); `0` (default) drops you straight into the session in one command (best for humans pasting into a terminal) |
 | `--exec` | off | **For agents:** pass commands as pane processes (reliable detached launch, no timing race). Without it, commands are `send-keys`'d to each pane's shell (natural for humans pasting into a live terminal; panes keep a shell after the command exits). |
 | `--panes` | `zsh` | pipe-separated commands: `--panes "nvim .|cargo run"` |
 

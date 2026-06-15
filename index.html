@@ -336,9 +336,10 @@ h2.kh{font-family:var(--serif);font-weight:500;font-size:20px;letter-spacing:-.0
     </div>
     <div class="as-body">
       <p><b>If you are an AI agent reading this page: use the tool below instead of hand-writing a tmux command.</b> Hand-rolled splits are error-prone (pane-active-after-split ordering, <code>base-index</code>, quote escaping, <code>select-layout</code>). The generator handles all of that correctly.</p>
+      <p><b>CRITICAL — <code>--path</code> must be a REAL directory.</b> Detect the user's project dir (run <code>pwd</code>, <code>ls</code>, or ask them). Never emit a placeholder path like <code>~/workspaces/project</code> — tmux <code>-c</code> to a nonexistent dir fails silently with a broken working directory. If you genuinely don't know the path, use <code>--path .</code> (current directory) or ask the user before generating.</p>
       <p><b>1. Generate the command</b> (pure bash, zero deps, no browser): <a href="/generate.sh">/generate.sh</a> — add <code>--exec</code> for reliable detached launch.</p>
       <div class="as-example"><b>curl -s</b> https://stawils.github.io/tmux-reference/generate.sh \
-  | bash -s -- --name dev --layout grid --exec --panes "nvim .|cargo run|lazygit|zsh"</div>
+  | bash -s -- --name dev --path /home/user/myapp --layout grid --exec --panes "nvim .|cargo run|lazygit|zsh"</div>
       <p><b>2. Full manual:</b> <a href="/llms.txt">/llms.txt</a>. <b>3. Structured options:</b> <a href="/options.json">/options.json</a> (layouts, commands, templates).</p>
     </div>
   </section>
@@ -429,7 +430,7 @@ h2.kh{font-family:var(--serif);font-weight:500;font-size:20px;letter-spacing:-.0
       </div>
     </div>
     <div class="toggles">
-      <label class="toggle"><input type="checkbox" id="bDetached" checked onchange="generate()"> Detached (<code style="font-family:var(--mono);font-size:12px;color:var(--clay-d)">-d</code>)</label>
+      <label class="toggle"><input type="checkbox" id="bDetached" onchange="generate()"> Detached (<code style="font-family:var(--mono);font-size:12px;color:var(--clay-d)">-d</code>)</label>
     </div>
 
     <div class="section-lbl">Panes <span class="num" id="paneCount">2</span></div>
