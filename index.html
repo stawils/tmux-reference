@@ -82,6 +82,33 @@ h1{font-family:var(--serif);font-weight:500;font-size:32px;letter-spacing:-.015e
 .theme-btn:hover{border-color:var(--clay);color:var(--clay);box-shadow:0 0 0 3px rgba(217,119,87,.1)}
 .theme-btn svg{width:16px;height:16px}
 
+/* ═══ agent-ready badge (CUA screenshot target + human hint) ═══ */
+.hdr-btns{display:flex;gap:8px;align-items:flex-start}
+.agent-badge{appearance:none;border:2px solid var(--olive-d);background:var(--olive);color:#fff;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.04em;padding:7px 12px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .15s;white-space:nowrap;height:38px;box-shadow:0 0 0 4px rgba(120,140,93,.18)}
+.agent-badge:hover{background:var(--olive-d);box-shadow:0 0 0 6px rgba(120,140,93,.22)}
+.agent-badge .pulse{width:7px;height:7px;border-radius:50%;background:#fff;box-shadow:0 0 6px rgba(255,255,255,.9);animation:agentpulse 2s ease-in-out infinite}
+@keyframes agentpulse{0%,100%{opacity:1}50%{opacity:.45}}
+.agent-badge svg{width:13px;height:13px}
+
+/* discovery surfaces panel (revealed by badge click) */
+.surfaces{position:fixed;top:72px;right:32px;z-index:60;background:var(--white);border:var(--border);border-radius:var(--r);box-shadow:var(--shadow-lg);width:380px;max-width:calc(100vw - 32px);overflow:hidden;display:none}
+.surfaces.open{display:block;animation:fade .18s ease}
+.surfaces-h{padding:13px 16px;border-bottom:var(--border);background:var(--gray-50);display:flex;align-items:center;justify-content:space-between}
+.surfaces-h .t{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--olive-d);font-weight:600}
+.surfaces-h .x{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:18px;line-height:1;padding:0}
+.surfaces-h .x:hover{color:var(--ink)}
+.surfaces-b{padding:8px;max-height:60vh;overflow-y:auto}
+.surface{display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border-radius:var(--r-sm);text-decoration:none;color:inherit;transition:background .1s;border:1px solid transparent}
+.surface:hover{background:var(--gray-50);border-color:var(--gray-100)}
+.surface .ic{width:26px;height:26px;border-radius:6px;background:var(--oat-2);color:var(--clay-d);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.surface .ic svg{width:14px;height:14px}
+.surface .meta{min-width:0;flex:1}
+.surface .meta .n{font-size:13px;font-weight:500;color:var(--slate)}
+.surface .meta .u{font-family:var(--mono);font-size:10px;color:var(--gray-500);word-break:break-all;margin-top:1px}
+.surface .meta .d{font-size:11px;color:var(--gray-500);margin-top:2px}
+.surfaces-foot{padding:11px 16px;border-top:var(--border);background:var(--gray-50);font-size:11px;color:var(--gray-500);display:flex;align-items:center;gap:6px}
+.surfaces-foot code{font-family:var(--mono);font-size:10px;color:var(--clay-d);background:var(--oat-2);padding:1px 5px;border-radius:3px}
+
 /* ══════════════ tabs ══════════════ */
 .tabs{display:flex;gap:0;border-bottom:var(--border);margin-bottom:32px;position:relative}
 .tab{appearance:none;border:none;background:none;font-family:var(--sans);font-size:14px;font-weight:500;color:var(--gray-500);padding:12px 20px 14px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1.5px;transition:color .15s;position:relative;display:flex;align-items:center;gap:8px}
@@ -266,11 +293,49 @@ h2.kh{font-family:var(--serif);font-weight:500;font-size:20px;letter-spacing:-.0
       <h1>Compose a workspace, copy a command.</h1>
       <p class="sub">Pick a layout, fill each pane, and get a ready-to-paste <code style="font-family:var(--mono);color:var(--clay-d)">tmux</code> one-liner. Save profiles, export them, or drop them into a script.</p>
     </div>
-    <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle theme">
-      <svg id="iMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-      <svg id="iSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-    </button>
+    <div class="hdr-btns">
+      <button class="agent-badge" onclick="toggleSurfaces(event)" title="This site is navigable by AI agents — click to see discovery surfaces" aria-label="Agent ready">
+        <span class="pulse"></span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"/><path d="M9 12l2 2 4-4"/></svg>
+        Agent-ready
+      </button>
+      <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle theme">
+        <svg id="iMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+        <svg id="iSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+    </div>
   </header>
+
+  <!-- agent discovery surfaces panel (revealed by badge) -->
+  <div class="surfaces" id="surfaces">
+    <div class="surfaces-h"><span class="t">Agent discovery surfaces</span><button class="x" onclick="toggleSurfaces(event)" aria-label="Close">&times;</button></div>
+    <div class="surfaces-b">
+      <a class="surface" href="/llms.txt">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg></span>
+        <span class="meta"><span class="n">/llms.txt</span><span class="u">/llms.txt</span><span class="d">Task-oriented manual for text agents (Claude, ChatGPT)</span></span>
+      </a>
+      <a class="surface" href="/options.json">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg></span>
+        <span class="meta"><span class="n">/options.json</span><span class="u">/options.json</span><span class="d">Structured catalogue for API-calling agents</span></span>
+      </a>
+      <a class="surface" href="/.well-known/agent-card.json">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></span>
+        <span class="meta"><span class="n">Agent Card (A2A)</span><span class="u">/.well-known/agent-card.json</span><span class="d">Google A2A card for MCP / A2A clients</span></span>
+      </a>
+      <a class="surface" href="/llms-full.txt">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h2M8 17h6M8 9h2"/></svg></span>
+        <span class="meta"><span class="n">/llms-full.txt</span><span class="u">/llms-full.txt</span><span class="d">Everything concatenated — one fetch for full context</span></span>
+      </a>
+      <div class="surface" style="cursor:default">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20"/></svg></span>
+        <span class="meta"><span class="n">In-browser tools (WebMCP)</span><span class="u">navigator.modelContext</span><span class="d">Chrome 149+: list_options, compose_workspace, apply_template</span></span>
+      </div>
+    </div>
+    <div class="surfaces-foot">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      Compose via URL params: <code>?name=&layout=&panes=a|b|c</code>
+    </div>
+  </div>
 
   <!-- ════════════ tabs ════════════ -->
   <div class="tabs" id="tabs">
@@ -838,6 +903,13 @@ function toggleTheme(){
   localStorage.setItem('tmux-theme',dark?'dark':'light');
   syncThemeIcon();
 }
+function toggleSurfaces(e){
+  if(e)e.stopPropagation();
+  $('surfaces').classList.toggle('open');
+}
+/* close surfaces panel on outside click / Escape */
+document.addEventListener('click',e=>{const s=$('surfaces');if(s.classList.contains('open')&&!s.contains(e.target)&&!e.target.closest('.agent-badge'))s.classList.remove('open')});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('surfaces').classList.remove('open')});
 $('tabs').addEventListener('click',e=>{
   const b=e.target.closest('.tab');if(!b)return;
   switchTab(b.dataset.p);
