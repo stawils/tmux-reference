@@ -673,47 +673,54 @@ function generate(){
   const name=$('bName').value.trim()||'session';
   const path=$('bPath').value.trim()||'.';
   const detached=$('bDetached').checked;
-  const lay=LAYOUTS[state.layout];
+  const lid=state.layout;
   const n=state.panes.length;
   if(!n){$('output').innerHTML='';return}
 
+  /* base-index agnostic: send to the active pane, split, send to the new active pane.
+     Never addresses panes by absolute index, so works under base-index 0 or 1. */
   let cmd='tmux new-session'+(detached?' -d':'')+' -s '+sh(name)+' -c '+sh(path);
 
-  if(n>=2) buildSplits(lay,n).forEach(s=>cmd+=' \\; '+s);
+  /* cmd0 -> initial pane (active) */
+  if(state.panes[0]&&state.panes[0].trim())
+    cmd+=" \; send-keys '"+state.panes[0].trim().replace(/'/g,"'\''")+"' Enter";
 
-  state.panes.forEach((c,i)=>{
-    const t=c.trim();
-    if(t) cmd+=" \\; send-keys -t "+i+" '"+t.replace(/'/g,"'\\''")+"' Enter";
-  });
+  /* interleaved: split-window + send-keys for panes 1..n-1 */
+  const specs=splitSpec(lid,n);
+  for(let i=1;i<n;i++){
+    const dir=specs[i-1]||'-v';
+    cmd+=' \; split-window '+dir+' -c "#{pane_current_path}"';
+    const t=state.panes[i]?state.panes[i].trim():'';
+    if(t) cmd+=" \; send-keys '"+t.replace(/'/g,"'\''")+"' Enter";
+  }
+
+  /* grid / main-3 get a final select-layout */
+  const fl=finalLayout(lid);
+  if(fl) cmd+=' \; select-layout '+fl;
 
   cmd+='\n<span class="cm"># tmux attach -t '+sh(name)+'</span>';
   $('output').innerHTML=cmd;
 }
-function sh(s){/* quote session/path if it contains spaces or shell metachars */return /[\s<>;|&(){}$`'"#]/.test(s)?`"${s}"`:s}
-function buildSplits(lay,n){
-  /* custom layout: just stack vertical splits */
-  if(lay.cols===0){const s=[];for(let i=1;i<n;i++) s.push('split-window -v -c "#{pane_current_path}"');return s}
-
-  const s=[];
-  const max=lay.rows*lay.cols;
-  const useN=Math.min(n,max);
-
-  /* row splits across the whole width */
-  for(let r=1;r<lay.rows;r++) s.push('split-window -v -c "#{pane_current_path}"');
-
-  /* column splits within each row */
-  for(let r=0;r<lay.rows;r++){
-    for(let c=1;c<lay.cols;c++){
-      const target=r*lay.cols;
-      let split='split-window -h -c "#{pane_current_path}"';
-      /* apply ratio to the first column split (main+side layouts) */
-      if(lay.ratio&&c===1&&r===0) split='split-window -h -p '+Math.round((1-lay.ratio)*100)+' -c "#{pane_current_path}"';
-      s.push('select-pane -t '+target+' \\; '+split);
-    }
+function sh(s){return /[\s<>;|&(){}$`'"#]/.test(s)?`"${s}"`:s}
+/* split options per pane (1..n-1), base-index agnostic */
+function splitSpec(lid,n){
+  const h=Array(n-1).fill('-h'), v=Array(n-1).fill('-v');
+  switch(lid){
+    case 0:return [];
+    case 1:return h;
+    case 2:return v;
+    case 3:return ['-h -p 38',...Array(Math.max(0,n-2)).fill('-h')];
+    case 4:return v;
+    case 5:return ['-h -p 38',...Array(Math.max(0,n-2)).fill('-v')];
+    case 6:return h;
+    case 7:return v;
+    default:return h;
   }
-  /* extra panes beyond the grid: append as vertical splits of last pane */
-  for(let i=max;i<n;i++) s.push('split-window -v -c "#{pane_current_path}"');
-  return s;
+}
+function finalLayout(lid){
+  if(lid===4)return 'tiled';
+  if(lid===5)return 'main-vertical';
+  return '';
 }
 
 /* ════════════════════════════════════════════

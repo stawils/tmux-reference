@@ -45,25 +45,9 @@ resolve_layout() {
   esac
 }
 
-# ── layout geometry ──
-layout_cols() {
-  case "$1" in 0) echo 1;; 1) echo 2;; 2) echo 1;; 3) echo 2;; 4) echo 2;; 5) echo 2;; 6) echo 3;; 7) echo 0;; esac
-}
-layout_rows() {
-  case "$1" in 0) echo 1;; 1) echo 1;; 2) echo 2;; 3) echo 1;; 4) echo 2;; 5) echo 2;; 6) echo 1;; 7) echo 0;; esac
-}
-layout_panes() {
-  case "$1" in 0) echo 1;; 1) echo 2;; 2) echo 2;; 3) echo 2;; 4) echo 4;; 5) echo 4;; 6) echo 3;; 7) echo 0;; esac
-}
-layout_ratio() {  # only main-side / main-3 have a ratio
-  case "$1" in 3|5) echo 62;; *) echo 0;; esac
-}
+# ── geometry helpers are inline in split_spec/final_layout below ──
 
 LID=$(resolve_layout "$LAYOUT")
-COLS=$(layout_cols "$LID")
-ROWS=$(layout_rows "$LID")
-DEFAULT_PANES=$(layout_panes "$LID")
-RATIO=$(layout_ratio "$LID")
 
 # ── split panes into array ──
 IFS='|' read -ra PANE_ARR <<< "$PANES"
@@ -87,65 +71,62 @@ quote_if_needed() {
 QNAME=$(quote_if_needed "$NAME")
 QPATH=$(quote_if_needed "$PATH_DIR")
 
-# ── build command ──
+# ── build command (base-index agnostic: never addresses panes by index) ──
+# Strategy: send cmd0 to the initial pane, then for each additional pane do
+# split-window + send-keys to the now-active new pane. For grid/main shapes,
+# finish with select-layout. No select-pane -t N / send-keys -t N anywhere,
+# so it works under base-index 0 OR 1.
 OUT="tmux new-session"
 [[ "$DETACHED" =~ ^(1|true|yes|on)$ ]] && OUT+=" -d"
 OUT+=" -s $QNAME -c $QPATH"
 
-build_splits() {
-  local lid=$1 cols=$2 rows=$3 ratio=$4 n=$5
-  local splits=()
-
-  # custom layout: just stack vertical splits
-  if [[ $cols -eq 0 ]]; then
-    for ((i=1; i<n; i++)); do splits+=('split-window -v -c "#{pane_current_path}"'); done
-    printf '%s\n' "${splits[@]}"
-    return
-  fi
-
-  local max=$((rows * cols))
-
-  # row splits across the whole width
-  for ((r=1; r<rows; r++)); do
-    splits+=('split-window -v -c "#{pane_current_path}"')
-  done
-
-  # column splits within each row
-  for ((r=0; r<rows; r++)); do
-    for ((c=1; c<cols; c++)); do
-      local target=$((r * cols))
-      local split='split-window -h -c "#{pane_current_path}"'
-      # apply ratio to first column split of main-side layouts
-      if [[ $ratio -gt 0 && $c -eq 1 && $r -eq 0 ]]; then
-        local pct=$((100 - ratio))
-        split="split-window -h -p $pct -c \"#{pane_current_path}\""
-      fi
-      splits+=("select-pane -t $target \\; $split")
-    done
-  done
-
-  # extra panes beyond the grid: append as vertical splits
-  for ((i=max; i<n; i++)); do
-    splits+=('split-window -v -c "#{pane_current_path}"')
-  done
-
-  printf '%s\n' "${splits[@]}"
+# split spec per layout: one spec PER LINE, for panes 1..N-1.
+# Each line is the full split-window options (e.g. "-h -p 38").
+split_spec() {
+  local lid=$1 n=$2
+  case "$lid" in
+    0) ;;                                              # single: no splits
+    1) for ((i=1;i<n;i++)); do echo "-h"; done ;;      # side-by-side
+    2) for ((i=1;i<n;i++)); do echo "-v"; done ;;      # stacked
+    3) echo "-h -p 38"; for ((i=2;i<n;i++)); do echo "-h"; done ;;  # main-side
+    4) for ((i=1;i<n;i++)); do echo "-v"; done ;;      # grid → select-layout tiled
+    5) echo "-h -p 38"; for ((i=2;i<n;i++)); do echo "-v"; done ;;  # main-3 → main-vertical
+    6) for ((i=1;i<n;i++)); do echo "-h"; done ;;      # 3 columns
+    7) for ((i=1;i<n;i++)); do echo "-v"; done ;;      # custom
+  esac
+}
+final_layout() {
+  case "$1" in
+    4) echo "tiled" ;;       # grid
+    5) echo "main-vertical" ;; # main-3
+    *) echo "" ;;
+  esac
 }
 
-# ── assemble splits ──
-if [[ $N -ge 2 ]]; then
-  while IFS= read -r line; do
-    [[ -n "$line" ]] && OUT+=" \\; $line"
-  done < <(build_splits "$LID" "$COLS" "$ROWS" "$RATIO" "$N")
-fi
-
-# ── send keys to each pane ──
-i=0
+# ── send cmd0 to the initial pane (active) ──
+first=1
 for cmd in "${PANES_CLEAN[@]}"; do
   cmd_trimmed="${cmd#"${cmd%%[![:space:]]*}"}"  # ltrim
-  [[ -n "$cmd_trimmed" ]] && OUT+=" \\; send-keys -t $i '$cmd_trimmed' Enter"
-  i=$((i+1))
+  if [[ $first -eq 1 ]]; then
+    [[ -n "$cmd_trimmed" ]] && OUT+=" \\; send-keys '$cmd_trimmed' Enter"
+    first=0
+  fi
 done
+
+# ── split + send each remaining pane to the active pane ──
+mapfile -t SPECS < <(split_spec "$LID" "$N")
+si=0
+for cmd in "${PANES_CLEAN[@]:1}"; do
+  dir="${SPECS[$si]:--v}"   # default -v if spec runs out (extra panes)
+  si=$((si+1))
+  OUT+=" \\; split-window $dir -c \"#{pane_current_path}\""
+  cmd_trimmed="${cmd#"${cmd%%[![:space:]]*}"}"
+  [[ -n "$cmd_trimmed" ]] && OUT+=" \\; send-keys '$cmd_trimmed' Enter"
+done
+
+# ── final arrangement for grid / main shapes ──
+FL=$(final_layout "$LID")
+[[ -n "$FL" ]] && OUT+=" \\; select-layout $FL"
 
 # ── output ──
 echo "$OUT"
