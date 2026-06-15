@@ -1,0 +1,67 @@
+# tmux Workstation Builder
+
+> A single-page tool that turns a visual pane layout into a ready-to-paste `tmux` one-liner. No backend, no build step, no dependencies. The entire app is one HTML file. State is supplied via URL query parameters, so you (an agent) can compose a workspace as a link and hand it to the user.
+
+Live URL: https://stawils.github.io/tmux-reference/
+Source: https://github.com/stawils/tmux-reference
+
+# How an agent uses it
+
+Compose a URL with query parameters. Opening it pre-fills the builder and shows the generated `tmux` command in the Output panel (and auto-copied by the user). The same URL works for humans and agents.
+
+## Query parameters
+
+All optional. Any subset may be provided.
+
+- `name`    — tmux session name. Default: `dev`. Example: `name=myproject`
+- `path`    — working directory passed to `tmux -c`. Default: `~/workspaces/project`. Example: `path=~%2Fcode%2Fapp`
+- `layout`  — pane arrangement. Accepts an index (0–7) or an alias (see below). Default: `side-by-side`.
+- `detached` — `1`/`true`/`on` adds the `-d` flag (recommended; user attaches manually). `0` attaches immediately. Default: `1`.
+- `panes`   — pipe-separated commands for each pane, in order. Example: `panes=nvim+.|cargo+run|lazygit`. Spaces may be `+` or `%20`. If omitted, panes default to `zsh`.
+  - Alternative: pass individual panes as `pane0=...&pane1=...&pane2=...`.
+
+## Layout aliases (for `layout=`)
+
+- `0` / `single` / `one`        — 1 pane
+- `1` / `side-by-side` / `2col` / `cols` / `horizontal` — 2 panes, left + right
+- `2` / `stacked` / `2row` / `rows` / `vertical`       — 2 panes, top + bottom
+- `3` / `main-side` / `main+side` / `main-vertical`    — wide main pane + narrow side
+- `4` / `grid` / `2x2` / `quad`                        — 2×2 grid (4 panes)
+- `5` / `main-3` / `main+3`                            — main pane + 3
+- `6` / `3col` / `3columns`                            — 3 columns
+- `7` / `custom` / `dynamic`                           — free-form (use any pane count)
+
+## Example links
+
+A 4-pane Rust dev workspace:
+https://stawils.github.io/tmux-reference/?name=app&path=~%2Fworkspaces%2Fapp&layout=grid&detached=1&panes=nvim+.|cargo+run|lazygit|cargo+watch+-x+test
+
+A simple editor + terminal split:
+https://stawils.github.io/tmux-reference/?name=dev&layout=side-by-side&panes=nvim+.|zsh
+
+Three SSH sessions side by side:
+https://stawils.github.io/tmux-reference/?name=servers&layout=3col&panes=ssh+web1|ssh+web2|ssh+db1
+
+# How to read the generated command
+
+After a URL is opened, the generated `tmux` one-liner appears inside the element with `id="output"` (a `<pre>` tag). If you can execute JS (headless browser), load the URL and read `document.getElementById('output').textContent`. The text contains the command followed by a commented attach line:
+
+```
+tmux new-session -d -s app -c ~/workspaces/app \; split-window -h ... \; send-keys -t 0 'nvim .' Enter ...
+# tmux attach -t app
+```
+
+# Command vocabulary (common values for `panes=`)
+
+Editors: `nvim .`, `code .`, `hx .`, `vim .`
+Test:    `cargo watch -x test`, `vitest`, `pytest -x`, `go test ./...`, `jest --watch`
+Git:     `lazygit`, `tig`, `git log --oneline -20`, `git status`
+Monitor: `htop`, `btop`, `journalctl -f`, `docker logs -f --tail 50`, `nethogs`
+Run:     `cargo run`, `npm run dev`, `go run .`, `docker compose up`, `python main.py`, `make run`
+Shell:   `zsh`, `bash`, `fish`, `clear`
+
+# Other content on the page
+
+The same page has two additional tabs with reference material (also useful to you):
+- **Key Reference** — tmux keybindings (prefix is Ctrl+a)
+- **Configuration** — copy-paste `~/.tmux.conf` snippets (prefix, general, mouse, Catppuccin status bar, vi copy mode, splits)

@@ -316,6 +316,10 @@ h2.kh{font-family:var(--serif);font-weight:500;font-size:20px;letter-spacing:-.0
       <div class="out-h">
         <span class="ol"><span class="pulse"></span> Generated command</span>
         <div class="btns">
+          <button class="btn" onclick="copyLink()" id="linkBtn" title="Copy a shareable URL for this configuration">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            Copy link
+          </button>
           <button class="btn" onclick="copyCmd()" id="copyBtn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
             Copy
@@ -832,9 +836,69 @@ document.addEventListener('keydown',e=>{
 });
 
 /* ════════════════════════════════════════════
+   DEEP LINKING — URL params as an agent API
+   ?name=&path=&layout=&detached=&panes=a|b|c
+   ════════════════════════════════════════════ */
+const LAY_ALIASES={
+  single:0,one:0,'1pane':0,
+  'side-by-side':1,sidebyside:1,'2col':1,cols:1,horizontal:1,'split-h':1,
+  stacked:2,'2row':2,rows:2,vertical:2,'split-v':2,
+  'main-side':3,'main+side':3,mainside:3,'main-vertical':3,
+  grid:4,'2x2':4,'4grid':4,quad:4,
+  'main-3':5,'main+3':5,main3:5,
+  '3col':6,'3columns':6,cols3:6,three:6,
+  custom:7,dyn:7,dynamic:7
+};
+function resolveLayout(v){
+  v=String(v).toLowerCase().trim();
+  if(/^\d+$/.test(v)){const n=+v;if(n>=0&&n<LAYOUTS.length)return n}
+  return v in LAY_ALIASES?LAY_ALIASES[v]:null;
+}
+const LAY_ALIASES_REV=['single','side-by-side','stacked','main-side','grid','main-3','3col','custom'];
+function applyParams(){
+  const q=new URLSearchParams(location.search);
+  if(!location.search)return false;
+  const lay=q.get('layout');
+  if(lay!==null){const idx=resolveLayout(lay);if(idx!==null)state.layout=idx}
+  const panesStr=q.get('panes');
+  if(panesStr!==null&&panesStr!==''){state.panes=panesStr.split('|').filter(x=>x!=='')}
+  else{const collected=[];for(let i=0;i<12;i++){const v=q.get('pane'+i);if(v===null)break;collected.push(v)}if(collected.length)state.panes=collected}
+  if(!state.panes.length)state.panes=['zsh'];
+  if(q.has('name')&&q.get('name')!=='')$('bName').value=q.get('name');
+  if(q.has('path')&&q.get('path')!=='')$('bPath').value=q.get('path');
+  const d=q.get('detached')||q.get('d');
+  if(d!==null)$('bDetached').checked=/^(1|true|yes|on)$/i.test(d);
+  return true;
+}
+function buildShareUrl(){
+  const q=new URLSearchParams();
+  q.set('name',$('bName').value);
+  q.set('path',$('bPath').value);
+  q.set('layout',LAY_ALIASES_REV[state.layout]||state.layout);
+  q.set('detached',$('bDetached').checked?'1':'0');
+  if(state.panes.length)q.set('panes',state.panes.join('|'));
+  return location.origin+location.pathname+'?'+q.toString();
+}
+function copyLink(){
+  const url=buildShareUrl();
+  clip(url);history.replaceState(null,'',url);
+  const b=$('linkBtn'),orig=b.innerHTML;
+  b.classList.add('copied');b.innerHTML='Link copied!';
+  setTimeout(()=>{b.classList.remove('copied');b.innerHTML=orig},1500);
+  toast('Shareable link copied');
+}
+
+/* ════════════════════════════════════════════
    INIT
    ════════════════════════════════════════════ */
+const hadParams=applyParams();
 renderTemplates();
+renderSaved();
+renderLayouts();
+renderPanes();
+renderKeys();
+renderConfig();
+syncThemeIcon();
 renderSaved();
 renderLayouts();
 renderPanes();
@@ -842,6 +906,8 @@ generate();
 renderKeys();
 renderConfig();
 syncThemeIcon();
+generate();
+if(hadParams){/* scroll output into view so deep-linked result is immediately visible */setTimeout(()=>{const o=document.querySelector('.out');if(o)o.scrollIntoView({behavior:'smooth',block:'nearest'})},250)}
 </script>
 </body>
 </html>
