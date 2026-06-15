@@ -1,0 +1,847 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tmux — Workstation Builder</title>
+<script>
+/* apply theme before paint to avoid flash */
+(function(){
+  try{
+    var s=localStorage.getItem('tmux-theme');
+    if(s==='dark'||(!s&&matchMedia('(prefers-color-scheme: dark)').matches))
+      document.documentElement.classList.add('dark');
+  }catch(e){}
+})();
+</script>
+<style>
+/* ══════════════ design tokens ══════════════ */
+:root{
+  --ivory:#FAF9F5;--slate:#141413;--clay:#D97757;--clay-d:#B85C3E;
+  --oat:#E3DACC;--oat-2:#EEE7D8;--olive:#788C5D;--olive-d:#5E7048;
+  --ink:#3D3D3A;--gray-50:#F0EEE6;--gray-100:#E7E4D9;--gray-200:#D1CFC5;
+  --gray-300:#BCB9AD;--gray-400:#A3A095;--gray-500:#87867F;
+  --gray-600:#6B6A64;--gray-800:#3D3D3A;--white:#fff;--black:#000;
+  --code-bg:#1a1a18;--code-text:#e8e6e0;--code-line:#2a2a26;
+  --shadow:0 1px 2px rgba(20,20,19,.04),0 4px 16px rgba(20,20,19,.06);
+  --shadow-lg:0 4px 24px rgba(20,20,19,.10);
+  --serif:ui-serif,Georgia,"Times New Roman",serif;
+  --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:12px;--r-sm:8px;--r-xs:6px;
+  --border:1.5px solid var(--gray-200);
+}
+html.dark{
+  --ivory:#15140f;--slate:#e8e6e0;--clay:#e8896b;--clay-d:#f0a48a;
+  --oat:#3a352c;--oat-2:#2a2620;--olive:#9bb084;--olive-d:#b5c89e;
+  --ink:#d8d6cf;--gray-50:#221f1a;--gray-100:#28251f;--gray-200:#322e27;
+  --gray-300:#46423a;--gray-400:#6b6759;--gray-500:#8a8676;
+  --gray-600:#a8a496;--gray-800:#d8d6cf;--white:#1d1b16;--black:#fff;
+  --code-bg:#0e0d0a;--code-text:#e8e6e0;--code-line:#1f1d18;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.35);
+  --shadow-lg:0 4px 24px rgba(0,0,0,.5);
+  --border:1.5px solid var(--gray-200);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--ivory);color:var(--slate);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;transition:background .2s,color .2s}
+::selection{background:rgba(217,119,87,.22)}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:6px;border:2px solid var(--ivory)}
+::-webkit-scrollbar-thumb:hover{background:var(--gray-300)}
+
+.wrap{max-width:1080px;margin:0 auto;padding:36px 32px 100px}
+
+/* ══════════════ header ══════════════ */
+header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:32px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--gray-500);display:flex;align-items:center;gap:8px}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--clay);box-shadow:0 0 8px rgba(217,119,87,.6)}
+h1{font-family:var(--serif);font-weight:500;font-size:32px;letter-spacing:-.015em;margin:8px 0 4px;line-height:1.15}
+.sub{color:var(--gray-500);max-width:560px;font-size:14px}
+.theme-btn{appearance:none;border:var(--border);background:var(--white);color:var(--ink);width:38px;height:38px;border-radius:var(--r-sm);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.theme-btn:hover{border-color:var(--clay);color:var(--clay);box-shadow:0 0 0 3px rgba(217,119,87,.1)}
+.theme-btn svg{width:16px;height:16px}
+
+/* ══════════════ tabs ══════════════ */
+.tabs{display:flex;gap:0;border-bottom:var(--border);margin-bottom:32px;position:relative}
+.tab{appearance:none;border:none;background:none;font-family:var(--sans);font-size:14px;font-weight:500;color:var(--gray-500);padding:12px 20px 14px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1.5px;transition:color .15s;position:relative;display:flex;align-items:center;gap:8px}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--slate);border-bottom-color:var(--clay)}
+.tab .kbd-hint{font-family:var(--mono);font-size:9px;color:var(--gray-400);background:var(--gray-50);border:1px solid var(--gray-200);border-radius:3px;padding:1px 4px}
+.panel{display:none}
+.panel.on{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* ══════════════ section labels ══════════════ */
+.section-lbl{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-500);margin:32px 0 12px;display:flex;align-items:center;gap:10px}
+.section-lbl:first-child{margin-top:0}
+.section-lbl .num{font-variant-numeric:tabular-nums;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:999px;padding:1px 8px;font-size:10px;color:var(--gray-600)}
+
+/* ══════════════ template cards ══════════════ */
+.tmpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.tmpl{background:var(--white);border:var(--border);border-radius:var(--r);padding:16px;cursor:pointer;transition:all .15s;text-align:left;display:flex;flex-direction:column;gap:8px}
+.tmpl:hover{border-color:var(--gray-300);transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+.tmpl:active{transform:translateY(-1px)}
+.tmpl-ic{width:34px;height:34px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;color:#fff}
+.tmpl-ic svg{width:17px;height:17px}
+.tmpl-n{font-family:var(--serif);font-size:16px;font-weight:500;letter-spacing:-.01em;color:var(--slate)}
+.tmpl-d{font-size:12px;color:var(--gray-500);line-height:1.45}
+.tmpl-meta{font-family:var(--mono);font-size:10px;color:var(--gray-400);letter-spacing:.04em;text-transform:uppercase;margin-top:auto}
+
+/* ══════════════ saved profiles ══════════════ */
+.saved{background:var(--white);border:var(--border);border-radius:var(--r);overflow:hidden}
+.saved-h{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;user-select:none;border-bottom:1px solid transparent;transition:background .12s}
+.saved-h:hover{background:var(--gray-50)}
+.saved.open .saved-h{border-bottom-color:var(--gray-200)}
+.saved-h .chev{transition:transform .18s;color:var(--gray-400)}
+.saved.open .saved-h .chev{transform:rotate(90deg)}
+.saved-h .t{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-600);flex:1}
+.saved-h .t b{color:var(--slate);font-weight:600}
+.saved-body{display:none;padding:14px 18px 18px}
+.saved.open .saved-body{display:block}
+.saved-list{display:flex;flex-direction:column;gap:6px}
+.saved-item{display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--gray-200);border-radius:var(--r-sm);background:var(--ivory);transition:border-color .12s}
+.saved-item:hover{border-color:var(--gray-300)}
+.saved-item .info{flex:1;min-width:0}
+.saved-item .nm{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--slate)}
+.saved-item .mt{font-size:11px;color:var(--gray-500);margin-top:1px}
+.saved-item .btns{display:flex;gap:5px;flex-shrink:0}
+.saved-empty{padding:24px 8px;text-align:center;color:var(--gray-400);font-size:13px}
+.saved-foot{display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--gray-100)}
+
+/* ══════════════ buttons ══════════════ */
+.btn{appearance:none;border:var(--border);background:var(--white);font-family:var(--sans);font-size:12px;font-weight:500;color:var(--ink);padding:7px 13px;border-radius:var(--r-sm);cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--gray-300);background:var(--gray-50)}
+.btn svg{width:13px;height:13px}
+.btn.pri{background:var(--clay);border-color:var(--clay);color:#fff}
+.btn.pri:hover{background:var(--clay-d);border-color:var(--clay-d)}
+.btn.olive{background:var(--olive);border-color:var(--olive);color:#fff}
+.btn.olive:hover{background:var(--olive-d);border-color:var(--olive-d)}
+.btn.sm{font-size:11px;padding:4px 9px}
+.btn.ghost-danger{color:var(--gray-500)}
+.btn.ghost-danger:hover{color:var(--clay-d);border-color:var(--clay-d);background:rgba(217,119,87,.06)}
+.btn.copied{background:var(--olive)!important;border-color:var(--olive)!important;color:#fff!important}
+
+/* ══════════════ layout picker ══════════════ */
+.lay-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px}
+.lay{background:var(--white);border:var(--border);border-radius:var(--r);padding:12px 10px 10px;cursor:pointer;transition:all .15s;text-align:center}
+.lay:hover{border-color:var(--gray-300)}
+.lay.sel{border-color:var(--clay);box-shadow:0 0 0 3px rgba(217,119,87,.12)}
+.mini{display:grid;gap:3px;height:42px;margin-bottom:8px;padding:3px;background:var(--gray-100);border-radius:5px}
+.mini>div{background:var(--gray-300);border-radius:2px;transition:background .15s;min-width:0;min-height:0}
+.lay.sel .mini>div{background:var(--clay)}
+.lay-n{font-family:var(--mono);font-size:10px;color:var(--gray-500);letter-spacing:.04em}
+.lay.sel .lay-n{color:var(--clay-d);font-weight:600}
+.lay-c{font-family:var(--mono);font-size:9px;color:var(--gray-400)}
+
+/* ══════════════ session form ══════════════ */
+.sess-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field-lbl{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--gray-500)}
+.inp{height:40px;padding:0 13px;font-family:var(--mono);font-size:13px;color:var(--slate);background:var(--white);border:var(--border);border-radius:var(--r-sm);outline:none;width:100%;transition:border-color .15s,box-shadow .15s}
+.inp:focus{border-color:var(--clay);box-shadow:0 0 0 3px rgba(217,119,87,.12)}
+.inp::placeholder{color:var(--gray-400)}
+.toggles{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px}
+.toggle{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--ink);user-select:none}
+.toggle input{appearance:none;width:18px;height:18px;border:var(--border);border-radius:5px;background:var(--white);cursor:pointer;position:relative;transition:all .15s;flex-shrink:0}
+.toggle input:checked{background:var(--clay);border-color:var(--clay)}
+.toggle input:checked::after{content:'';position:absolute;left:5px;top:1.5px;width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+
+/* ══════════════ pane editor ══════════════ */
+.pane{background:var(--white);border:var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:10px;transition:border-color .15s}
+.pane:focus-within{border-color:var(--gray-300)}
+.pane-h{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--gray-100);background:var(--gray-50)}
+.pane-num{width:22px;height:22px;border-radius:50%;background:var(--clay);color:#fff;font-size:11px;font-weight:700;font-family:var(--mono);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pane-h .lbl{font-family:var(--mono);font-size:12px;color:var(--gray-600);letter-spacing:.04em}
+.pane-h .rm{margin-left:auto;background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:20px;line-height:1;padding:0 4px;transition:color .1s}
+.pane-h .rm:hover{color:var(--clay-d)}
+.pane-b{padding:13px 16px}
+.cmd-row{display:flex;gap:8px}
+.cmd-inp{flex:1;min-width:0;height:36px;padding:0 12px;font-family:var(--mono);font-size:13px;color:var(--slate);background:var(--ivory);border:var(--border);border-radius:var(--r-sm);outline:none;transition:border-color .15s,box-shadow .15s}
+.cmd-inp:focus{border-color:var(--clay);box-shadow:0 0 0 3px rgba(217,119,87,.1);background:var(--white)}
+.cmd-inp::placeholder{color:var(--gray-400)}
+.chip-btn{height:36px;padding:0 13px;font-family:var(--mono);font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--gray-600);background:var(--gray-50);border:var(--border);border-radius:var(--r-sm);cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.chip-btn:hover{color:var(--ink);border-color:var(--gray-300)}
+.chip-btn .chev{transition:transform .15s;font-size:9px}
+.chip-btn.open .chev{transform:rotate(180deg)}
+
+.chip-area{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--gray-100)}
+.chip-area.open{display:block;animation:fade .2s ease}
+.chip-cat{margin-bottom:10px}
+.chip-cat:last-child{margin-bottom:0}
+.chip-cat-l{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--gray-400);margin-bottom:5px}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{appearance:none;border:1px solid var(--gray-200);background:var(--ivory);font-family:var(--mono);font-size:11px;padding:4px 10px;border-radius:999px;cursor:pointer;color:var(--gray-600);transition:all .1s;white-space:nowrap}
+.chip:hover{border-color:var(--clay);color:var(--clay-d);background:var(--oat-2)}
+.chip.active{background:var(--clay);color:#fff;border-color:var(--clay)}
+
+.add-pane{width:100%;appearance:none;border:1.5px dashed var(--gray-300);background:none;color:var(--gray-500);font-family:var(--sans);font-size:13px;font-weight:500;padding:13px;border-radius:var(--r);cursor:pointer;transition:all .15s;margin-top:4px}
+.add-pane:hover{border-color:var(--clay);color:var(--clay-d);background:rgba(217,119,87,.04)}
+
+/* ══════════════ output ══════════════ */
+.out{background:var(--white);border:var(--border);border-radius:var(--r);overflow:hidden}
+.out-h{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:var(--border);background:var(--gray-50)}
+.out-h .ol{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--clay-d);font-weight:600;display:flex;align-items:center;gap:8px}
+.out-h .ol .pulse{width:7px;height:7px;border-radius:50%;background:var(--olive);box-shadow:0 0 6px rgba(120,140,93,.6)}
+.out-h .btns{display:flex;gap:6px}
+.out pre{font-family:var(--mono);font-size:12.5px;line-height:1.75;color:var(--olive-d);white-space:pre-wrap;word-break:break-word;padding:16px;margin:0;background:var(--ivory);min-height:64px}
+.out pre .cm{color:var(--gray-400)}
+html.dark .out pre{color:var(--olive)}
+
+/* ══════════════ keys ══════════════ */
+.pfx-bar{display:inline-flex;align-items:center;gap:10px;background:var(--white);border:var(--border);border-left:3px solid var(--clay);border-radius:var(--r);padding:11px 18px;margin-bottom:8px;font-size:13px;color:var(--ink)}
+.pfx-bar kbd{font-family:var(--mono);font-size:11px;background:var(--oat-2);border:1px solid var(--oat);border-radius:4px;padding:2px 7px;color:var(--clay-d);font-weight:600}
+.pfx-bar code{font-family:var(--mono);font-size:13px;color:var(--clay-d)}
+h2.kh{font-family:var(--serif);font-weight:500;font-size:20px;letter-spacing:-.01em;color:var(--slate);scroll-margin-top:24px}
+.kdesc{color:var(--gray-500);font-size:13px;margin-bottom:12px}
+.kt{background:var(--white);border:var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:8px}
+.kr{display:grid;grid-template-columns:200px 1fr;border-bottom:1px solid var(--gray-100);transition:background .1s}
+.kr:last-child{border-bottom:none}
+.kr:hover{background:var(--gray-50)}
+.kr .k{padding:11px 16px;font-family:var(--mono);font-size:12.5px;color:var(--clay-d);border-right:1px solid var(--gray-100);font-weight:500;display:flex;align-items:center}
+.kr .v{padding:11px 16px;font-size:13px;color:var(--ink);display:flex;align-items:center}
+.khint{margin-top:8px;font-size:12px;color:var(--gray-500);margin-bottom:24px}
+.khint code{color:var(--clay-d);font-family:var(--mono);font-size:11px;background:var(--oat-2);padding:1px 5px;border-radius:3px}
+
+/* ══════════════ config ══════════════ */
+.cfg{background:var(--white);border:var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:10px}
+.cfg-h{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;user-select:none;transition:background .12s}
+.cfg-h:hover{background:var(--gray-50)}
+.cfg-h .t{font-family:var(--serif);font-size:16px;font-weight:500;color:var(--slate);letter-spacing:-.005em}
+.cfg-h .a{display:flex;align-items:center;gap:10px;color:var(--gray-400)}
+.cfg.open .cfg-h .chev{transform:rotate(90deg)}
+.cfg-h .chev{transition:transform .18s}
+.cfg-bd{display:none;padding:18px;border-top:var(--border)}
+.cfg.open .cfg-bd{display:block;animation:fade .2s ease}
+.cfg-bd pre{font-family:var(--mono);font-size:12px;line-height:1.75;color:var(--ink);white-space:pre;overflow-x:auto;background:var(--ivory);border:1px solid var(--gray-100);border-radius:var(--r-sm);padding:14px;margin-bottom:12px}
+.cfg-bd pre .cm{color:var(--gray-400)}
+.cfg-bd pre .st{color:var(--olive-d)}
+.cfg-bd .note{font-size:12px;color:var(--gray-500);border-top:1px solid var(--gray-100);padding-top:11px;margin-top:4px}
+
+/* ══════════════ toast ══════════════ */
+#toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--slate);color:var(--ivory);font-family:var(--mono);font-size:12px;padding:10px 22px;border-radius:999px;opacity:0;transition:opacity .25s,transform .25s;z-index:999;pointer-events:none;box-shadow:var(--shadow-lg)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ══════════════ responsive ══════════════ */
+@media(max-width:680px){
+  .wrap{padding:24px 18px 80px}
+  h1{font-size:26px}
+  .sess-grid{grid-template-columns:1fr}
+  .lay-grid{grid-template-columns:repeat(3,1fr)}
+  .tmpl-grid{grid-template-columns:1fr 1fr}
+  .kr{grid-template-columns:1fr}
+  .kr .k{border-right:none;border-bottom:1px solid var(--gray-100)}
+  .tab{padding:12px 14px;font-size:13px}
+  .tab .kbd-hint{display:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ════════════ header ════════════ -->
+  <header>
+    <div>
+      <div class="eyebrow"><span class="dot"></span> tmux workstation builder</div>
+      <h1>Compose a workspace, copy a command.</h1>
+      <p class="sub">Pick a layout, fill each pane, and get a ready-to-paste <code style="font-family:var(--mono);color:var(--clay-d)">tmux</code> one-liner. Save profiles, export them, or drop them into a script.</p>
+    </div>
+    <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle theme">
+      <svg id="iMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      <svg id="iSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    </button>
+  </header>
+
+  <!-- ════════════ tabs ════════════ -->
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-p="builder">Builder <span class="kbd-hint">⌥1</span></button>
+    <button class="tab" data-p="keys">Key Reference <span class="kbd-hint">⌥2</span></button>
+    <button class="tab" data-p="config">Configuration <span class="kbd-hint">⌥3</span></button>
+  </div>
+
+  <!-- ════════════ builder ════════════ -->
+  <div class="panel on" id="p-builder">
+
+    <div class="section-lbl">Quick start</div>
+    <div class="tmpl-grid" id="templates"></div>
+
+    <div class="section-lbl">Saved profiles <span class="num" id="savedCount">0</span></div>
+    <div class="saved" id="savedBox">
+      <div class="saved-h" onclick="toggleSaved()">
+        <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="t"><b>My profiles</b> — stored in this browser</span>
+        <button class="btn pri sm" onclick="event.stopPropagation();saveProfile()">Save current</button>
+      </div>
+      <div class="saved-body">
+        <div class="saved-list" id="savedList"></div>
+        <div class="saved-foot">
+          <button class="btn sm" onclick="exportProfile()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Export JSON
+          </button>
+          <button class="btn sm" onclick="document.getElementById('importFile').click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            Import JSON
+          </button>
+          <input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
+        </div>
+      </div>
+    </div>
+
+    <div class="section-lbl">Layout <span class="num" id="layName">2 panes</span></div>
+    <div class="lay-grid" id="layouts"></div>
+
+    <div class="section-lbl">Session</div>
+    <div class="sess-grid">
+      <div class="field">
+        <span class="field-lbl">Session name</span>
+        <input class="inp" id="bName" value="dev" oninput="generate()" placeholder="dev">
+      </div>
+      <div class="field">
+        <span class="field-lbl">Working directory</span>
+        <input class="inp" id="bPath" value="~/workspaces/project" oninput="generate()" placeholder="~/project">
+      </div>
+    </div>
+    <div class="toggles">
+      <label class="toggle"><input type="checkbox" id="bDetached" checked onchange="generate()"> Detached (<code style="font-family:var(--mono);font-size:12px;color:var(--clay-d)">-d</code>)</label>
+    </div>
+
+    <div class="section-lbl">Panes <span class="num" id="paneCount">2</span></div>
+    <div id="panes"></div>
+    <button class="add-pane" onclick="addPane()">+ Add pane</button>
+
+    <div class="section-lbl">Output</div>
+    <div class="out">
+      <div class="out-h">
+        <span class="ol"><span class="pulse"></span> Generated command</span>
+        <div class="btns">
+          <button class="btn" onclick="copyCmd()" id="copyBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            Copy
+          </button>
+          <button class="btn" onclick="saveAlias()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+            Save as alias
+          </button>
+          <button class="btn olive" onclick="saveScript()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+            Save as script
+          </button>
+        </div>
+      </div>
+      <pre id="output"></pre>
+    </div>
+  </div>
+
+  <!-- ════════════ keys ════════════ -->
+  <div class="panel" id="p-keys">
+    <div class="pfx-bar">Prefix = <kbd>Ctrl</kbd> + <kbd>a</kbd> &nbsp;·&nbsp; shown below as <code>⌈</code></div>
+    <div id="keysContainer"></div>
+  </div>
+
+  <!-- ════════════ config ════════════ -->
+  <div class="panel" id="p-config">
+    <p class="kdesc">Drop any block into <code style="font-family:var(--mono);color:var(--clay-d)">~/.tmux.conf</code> and reload with <code style="font-family:var(--mono);color:var(--clay-d)">⌈ r</code> (<code style="font-family:var(--mono);font-size:11px;color:var(--clay-d)">tmux source-file ~/.tmux.conf</code>).</p>
+    <div id="cfgContainer"></div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ════════════════════════════════════════════
+   DATA
+   ════════════════════════════════════════════ */
+const PRESETS=[
+  ['Editors',[['nvim .','Neovim'],['code .','VS Code'],['hx .','Helix'],['vim .','Vim'],['nano .','Nano']]],
+  ['Test',[['cargo watch -x test','Cargo watch'],['cargo test','Cargo test'],['vitest','Vitest'],['pytest -x','pytest'],['go test ./...','Go test'],['jest --watch','Jest'],['npm test','npm test']]],
+  ['Git',[['lazygit','lazygit'],['tig','tig'],['git log --oneline -20','Recent log'],['git status','Status'],['git diff','Diff']]],
+  ['Monitor',[['htop','htop'],['btop','btop'],['journalctl -f','systemd logs'],['docker logs -f --tail 50','Docker logs'],['docker compose logs -f','Compose logs'],['nethogs','Network'],['iftop','Bandwidth'],['iostat -x 2','Disk I/O']]],
+  ['Remote',[['ssh user@host','SSH'],['ssh -t tmux attach','SSH + tmux'],['mosh user@host','Mosh'],['kubectl logs -f deploy/app','K8s logs']]],
+  ['Run',[['make run','make run'],['cargo run','Cargo run'],['npm run dev','npm dev'],['go run .','Go run'],['docker compose up','Compose up'],['python main.py','Python']]],
+  ['Shell',[['zsh','Zsh'],['bash','Bash'],['fish','Fish'],['clear','Clear'],['ls -la','List'],['make','Make']]],
+];
+
+/* layouts: cells = [col,row] positions filled. ratio = main-pane width fraction */
+const LAYOUTS=[
+  {n:'Single',       cols:1,rows:1,cells:[[0,0]]},
+  {n:'Side by side', cols:2,rows:1,cells:[[0,0],[1,0]]},
+  {n:'Stacked',      cols:1,rows:2,cells:[[0,0],[0,1]]},
+  {n:'Main + side',  cols:2,rows:1,cells:[[0,0],[1,0]],ratio:.62},
+  {n:'2×2 grid',     cols:2,rows:2,cells:[[0,0],[1,0],[0,1],[1,1]]},
+  {n:'Main + 3',     cols:2,rows:2,cells:[[0,0],[1,0],[0,1],[1,1]],ratio:.62},
+  {n:'3 columns',    cols:3,rows:1,cells:[[0,0],[1,0],[2,0]]},
+  {n:'Custom',       cols:0,rows:0,cells:[]},
+];
+
+const TEMPLATES=[
+  {n:'Dev workspace',d:'Editor, build, git, tests in a grid.',c:'#0070f3',layout:4,panes:['nvim .','cargo run','lazygit','cargo watch -x test'],name:'dev'},
+  {n:'Code + test',  d:'Editor beside a live test watcher.',c:'#788C5D',layout:1,panes:['nvim .','cargo watch -x test'],name:'code'},
+  {n:'Monitoring',   d:'Process, system, network, disk.',   c:'#C78E3F',layout:4,panes:['htop','journalctl -f','nethogs','iostat -x 2'],name:'mon'},
+  {n:'Git session',  d:'lazygit wide, editor narrow.',      c:'#A78BFA',layout:3,panes:['lazygit','nvim .'],name:'git'},
+  {n:'Research',     d:'Notes, man page, scratch, monitor.',c:'#4A8B8B',layout:4,panes:['nvim notes.md','man tmux','zsh','btop'],name:'research'},
+  {n:'Multi-SSH',    d:'Three servers side by side.',       c:'#D97757',layout:6,panes:['ssh web1','ssh web2','ssh db1'],name:'servers'},
+  {n:'Docker dev',   d:'Editor, compose, logs, shell.',     c:'#B04A4A',layout:4,panes:['nvim .','docker compose up','docker compose logs -f','zsh'],name:'docker'},
+  {n:'Simple split', d:'Two plain shells, nothing else.',   c:'#87867F',layout:1,panes:['zsh','zsh'],name:'work'},
+];
+
+const KEY_SECTIONS=[
+  {id:'win',n:'Windows',desc:'Tabs across the top of a session.',rows:[
+    ['⌈ c','New window'],['⌈ ,','Rename window'],['⌈ &','Kill window'],
+    ['Tab','Toggle last window'],['⌈ < / >','Swap window left / right'],
+    ['Alt+1–9','Jump to window N'],['Alt+← / →','Previous / next window'],
+  ]},
+  {id:'panes',n:'Panes',desc:'Splits inside a single window.',rows:[
+    ['⌈ |','Split vertical (left/right)'],['⌈ -','Split horizontal (top/bottom)'],
+    ['⌈ h / j / k / l','Navigate panes (vim)'],['Alt+← ↑ ↓ →','Navigate (no prefix)'],
+    ['⌈ H / J / K / L','Resize by 5 (repeat)'],['⌈ z','Zoom / unzoom pane'],
+    ['⌈ x','Kill pane'],['⌈ < / >','Swap pane'],
+  ]},
+  {id:'sess',n:'Sessions',desc:'Named, detachable session groups.',rows:[
+    ['⌈ S','New session (prompt)'],['⌈ $','Rename session'],
+    ['⌈ ( / )','Previous / next session'],['⌈ d','Detach'],
+    ['⌈ ⌈','Send literal prefix (nested tmux)'],
+  ],hint:'CLI: <code>tmux ls</code> · <code>tmux attach -t name</code> · <code>tmux kill-session -t name</code>'},
+  {id:'copy',n:'Copy mode',desc:'Enter with ⌈ [ or ⌈ Enter. Vi-style keys.',rows:[
+    ['v','Begin selection'],['Ctrl+v','Rectangle toggle'],['y / Enter','Copy & exit'],
+    ['Escape','Cancel'],['H / L','Start / end of line'],['K / J','Half page up / down'],
+    ['⌈ p','Paste from clipboard'],
+  ]},
+  {id:'lay',n:'Layouts',desc:'Rearrange all panes in the window.',rows:[
+    ['⌈ M-1','Even horizontal'],['⌈ M-2','Even vertical'],['⌈ M-3','Main horizontal'],
+    ['⌈ M-4','Main vertical'],['⌈ M-5','Tiled'],['⌈ Space','Cycle layouts'],
+  ]},
+  {id:'misc',n:'Misc',desc:'',rows:[
+    ['⌈ r','Reload config'],['⌈ e','Open config in $EDITOR'],['⌈ ?','List all bindings'],
+    ['⌈ t','Big clock'],['⌈ :','Command prompt'],
+  ]},
+];
+
+const CONFIG_SECTIONS=[
+  {id:'prefix',n:'Change the prefix key',code:
+`# Ctrl+a  (recommended)
+set -g prefix C-a
+unbind C-b
+bind C-a send-prefix
+
+# Alternatives — uncomment one:
+# set -g prefix C-Space ; unbind C-b ; bind C-Space send-prefix
+# set -g prefix \\\`      ; unbind C-b ; bind \\\` send-prefix`,note:'send-prefix lets you type the prefix twice inside nested tmux.'},
+  {id:'general',n:'General settings',code:
+`set -g default-terminal "screen-256color"
+set -ga terminal-overrides ",xterm-256color:Tc"
+set -g history-limit 50000
+set -g base-index 1
+setw -g pane-base-index 1
+set -g renumber-windows on
+set -sg escape-time 0
+set -g display-time 2500
+set -g repeat-time 600
+set -g set-clipboard on
+set -g focus-events on`,note:'escape-time 0 matters for Vim/Neovim responsiveness. history-limit 50000 keeps long scrollback.'},
+  {id:'mouse',n:'Mouse support',code:
+`set -g mouse on
+# Toggle with a key:
+bind m set -g mouse \\; display "Mouse: #{?mouse,on,off}"`,note:'Click panes, drag borders, scroll into copy mode. Toggle off when you need raw terminal selection.'},
+  {id:'status',n:'Status bar (Catppuccin Mocha)',code:
+`set -g status-style                 "bg=#1e1e2e,fg=#cdd6f4"
+set -g window-status-current-style  "bg=#89b4fa,fg=#1e1e2e,bold"
+set -g window-status-style          "fg=#6c7086"
+set -g window-status-activity-style "fg=#f9e2af"
+set -g pane-border-style            "fg=#313244"
+set -g pane-active-border-style     "fg=#89b4fa"
+set -g message-style                "bg=#f38ba8,fg=#1e1e2e,bold"
+set -g mode-style                   "bg=#89b4fa,fg=#1e1e2e"
+
+set -g status-left-length 40
+set -g status-left "#[bg=#89b4fa,fg=#1e1e2e,bold] #S #[default] "
+set -g status-right-length 80
+set -g status-right "#[fg=#a6e3a1] #(whoami)#[fg=#6c7086]@#[fg=#a6e3a1]#H #[fg=#f9e2af] %a %Y-%m-%d #[fg=#89b4fa] %H:%M "
+set -g window-status-format         " #I:#W#{?window_activity_flag,!,} "
+set -g window-status-current-format " #I:#W "
+set -g window-status-separator      ""`,note:'Swap the hex values for any palette. The ! after a window name marks activity.'},
+  {id:'copy',n:'Copy mode (Vi + clipboard)',code:
+`setw -g mode-keys vi
+bind Enter copy-mode
+bind -T copy-mode-vi v      send-keys -X begin-selection
+bind -T copy-mode-vi C-v    send-keys -X rectangle-toggle
+bind -T copy-mode-vi y      send-keys -X copy-pipe-and-cancel "xclip -selection clipboard -in"
+bind -T copy-mode-vi Enter  send-keys -X copy-pipe-and-cancel "xclip -selection clipboard -in"
+bind -T copy-mode-vi Escape send-keys -X cancel
+bind p run "xclip -selection clipboard -out | tmux load-buffer - && tmux paste-buffer"`,note:'Wayland users: replace xclip with wl-copy / wl-paste. macOS: use pbcopy / pbpaste.'},
+  {id:'splits',n:'Splits & navigation',code:
+`bind | split-window -h -c "#{pane_current_path}"
+bind - split-window -v -c "#{pane_current_path}"
+bind h select-pane -L
+bind j select-pane -D
+bind k select-pane -U
+bind l select-pane -R
+bind -n M-Left  select-pane -L
+bind -n M-Right select-pane -R
+bind -n M-Up    select-pane -U
+bind -n M-Down  select-pane -D
+bind -r H resize-pane -L 5
+bind -r J resize-pane -D 5
+bind -r K resize-pane -U 5
+bind -r L resize-pane -R 5`,note:'New splits inherit the current directory. Alt+arrows navigate without the prefix.'},
+];
+
+/* ════════════════════════════════════════════
+   STATE
+   ════════════════════════════════════════════ */
+let state={layout:1,panes:['zsh','zsh']};
+
+/* ════════════════════════════════════════════
+   UTIL
+   ════════════════════════════════════════════ */
+const $=id=>document.getElementById(id);
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2000)}
+function clip(text){navigator.clipboard&&navigator.clipboard.writeText(text)}
+
+/* ════════════════════════════════════════════
+   RENDER: templates
+   ════════════════════════════════════════════ */
+function renderTemplates(){
+  $('templates').innerHTML=TEMPLATES.map((t,i)=>`
+    <button class="tmpl" onclick="loadTemplate(${i})">
+      <div class="tmpl-ic" style="background:${t.c}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20M6 14h4M14 14h4"/></svg>
+      </div>
+      <div class="tmpl-n">${t.n}</div>
+      <div class="tmpl-d">${t.d}</div>
+      <div class="tmpl-meta">${t.panes.length} panes · ${LAYOUTS[t.layout].n.toLowerCase()}</div>
+    </button>`).join('');
+}
+
+/* ════════════════════════════════════════════
+   RENDER: layouts
+   ════════════════════════════════════════════ */
+function renderLayouts(){
+  $('layouts').innerHTML=LAYOUTS.map((l,i)=>{
+    if(l.cols===0){
+      return `<button class="lay${state.layout===i?' sel':''}" onclick="pickLayout(${i})">
+        <div class="mini" style="grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr">
+          <div style="opacity:.25;display:flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg></div>
+          <div style="opacity:.25"></div><div style="opacity:.25"></div><div style="opacity:.25"></div>
+        </div>
+        <div class="lay-n">${l.n}</div><div class="lay-c">dynamic</div></button>`;
+    }
+    const ratio=l.ratio;
+    const cols=ratio?`${ratio}fr ${1-ratio}fr`:`repeat(${l.cols},1fr)`;
+    const rows=l.rows>1?`grid-template-rows:repeat(${l.rows},1fr)`:'';
+    const filled=new Set(l.cells.map(c=>c[0]+','+c[1]));
+    let divs='';
+    for(let r=0;r<l.rows;r++)for(let c=0;c<l.cols;c++) divs+=`<div${filled.has(c+','+r)?'':' style="opacity:.18"'}></div>`;
+    return `<button class="lay${state.layout===i?' sel':''}" onclick="pickLayout(${i})">
+      <div class="mini" style="grid-template-columns:${cols};${rows}">${divs}</div>
+      <div class="lay-n">${l.n}</div><div class="lay-c">${l.cells.length} pane${l.cells.length>1?'s':''}</div></button>`;
+  }).join('');
+  $('layName').textContent=LAYOUTS[state.layout].cells.length+' panes';
+}
+
+/* ════════════════════════════════════════════
+   RENDER: panes
+   ════════════════════════════════════════════ */
+function renderPanes(){
+  $('panes').innerHTML=state.panes.map((cmd,i)=>{
+    const chips=PRESETS.map(([cat,items])=>{
+      const btns=items.map(([v,label])=>`<button class="chip${cmd===v?' active':''}" onclick="setPane(${i},'${esc(v)}')">${label}</button>`).join('');
+      return `<div class="chip-cat"><div class="chip-cat-l">${cat}</div><div class="chips">${btns}</div></div>`;
+    }).join('');
+    return `<div class="pane">
+      <div class="pane-h">
+        <div class="pane-num">${i+1}</div>
+        <span class="lbl">Pane ${i+1}</span>
+        <button class="rm" onclick="removePane(${i})" title="Remove pane">&times;</button>
+      </div>
+      <div class="pane-b">
+        <div class="cmd-row">
+          <input class="cmd-inp" value="${esc(cmd)}" oninput="setPane(${i},this.value)" placeholder="command or pick below…">
+          <button class="chip-btn" onclick="toggleChip(${i},this)">
+            <span>Picks</span><span class="chev">▾</span>
+          </button>
+        </div>
+        <div class="chip-area" id="chips-${i}">${chips}</div>
+      </div>
+    </div>`;
+  }).join('');
+  $('paneCount').textContent=state.panes.length;
+}
+function toggleChip(i,btn){const a=$('chips-'+i);a.classList.toggle('open');btn.classList.toggle('open')}
+
+/* ════════════════════════════════════════════
+   GENERATE
+   ════════════════════════════════════════════ */
+function generate(){
+  const name=$('bName').value.trim()||'session';
+  const path=$('bPath').value.trim()||'.';
+  const detached=$('bDetached').checked;
+  const lay=LAYOUTS[state.layout];
+  const n=state.panes.length;
+  if(!n){$('output').innerHTML='';return}
+
+  let cmd='tmux new-session'+(detached?' -d':'')+' -s '+sh(name)+' -c '+sh(path);
+
+  if(n>=2) buildSplits(lay,n).forEach(s=>cmd+=' \\; '+s);
+
+  state.panes.forEach((c,i)=>{
+    const t=c.trim();
+    if(t) cmd+=" \\; send-keys -t "+i+" '"+t.replace(/'/g,"'\\''")+"' Enter";
+  });
+
+  cmd+='\n<span class="cm"># tmux attach -t '+sh(name)+'</span>';
+  $('output').innerHTML=cmd;
+}
+function sh(s){/* quote session/path if it contains spaces or shell metachars */return /[\s<>;|&(){}$`'"#]/.test(s)?`"${s}"`:s}
+function buildSplits(lay,n){
+  /* custom layout: just stack vertical splits */
+  if(lay.cols===0){const s=[];for(let i=1;i<n;i++) s.push('split-window -v -c "#{pane_current_path}"');return s}
+
+  const s=[];
+  const max=lay.rows*lay.cols;
+  const useN=Math.min(n,max);
+
+  /* row splits across the whole width */
+  for(let r=1;r<lay.rows;r++) s.push('split-window -v -c "#{pane_current_path}"');
+
+  /* column splits within each row */
+  for(let r=0;r<lay.rows;r++){
+    for(let c=1;c<lay.cols;c++){
+      const target=r*lay.cols;
+      let split='split-window -h -c "#{pane_current_path}"';
+      /* apply ratio to the first column split (main+side layouts) */
+      if(lay.ratio&&c===1&&r===0) split='split-window -h -p '+Math.round((1-lay.ratio)*100)+' -c "#{pane_current_path}"';
+      s.push('select-pane -t '+target+' \\; '+split);
+    }
+  }
+  /* extra panes beyond the grid: append as vertical splits of last pane */
+  for(let i=max;i<n;i++) s.push('split-window -v -c "#{pane_current_path}"');
+  return s;
+}
+
+/* ════════════════════════════════════════════
+   ACTIONS
+   ════════════════════════════════════════════ */
+function pickLayout(i){
+  state.layout=i;
+  const lay=LAYOUTS[i];
+  if(lay.cols>0){
+    const target=lay.cells.length;
+    while(state.panes.length<target) state.panes.push('zsh');
+    if(state.panes.length>target&&state.panes.length>1) state.panes.length=target;
+  }
+  renderLayouts();renderPanes();generate();
+}
+function setPane(i,val){
+  state.panes[i]=val;
+  generate();
+  /* update chip active states without full re-render (keeps focus) */
+  const card=document.querySelectorAll('#panes .pane')[i];
+  if(!card)return;
+  card.querySelectorAll('.chip').forEach(el=>{
+    let active=false;
+    PRESETS.forEach(([_,items])=>items.forEach(([v,label])=>{if(el.textContent===label&&v===val)active=true}));
+    el.classList.toggle('active',active);
+  });
+}
+function addPane(){
+  state.panes.push('zsh');
+  if(LAYOUTS[state.layout].cells.length!==state.panes.length){
+    state.layout=LAYOUTS.findIndex(l=>l.cols===0);/* custom */
+  }
+  renderLayouts();renderPanes();generate();
+}
+function removePane(i){
+  if(state.panes.length<=1)return;
+  state.panes.splice(i,1);
+  if(LAYOUTS[state.layout].cells.length!==state.panes.length) state.layout=LAYOUTS.findIndex(l=>l.cols===0);
+  renderLayouts();renderPanes();generate();
+}
+function loadTemplate(i){
+  const t=TEMPLATES[i];
+  state.layout=t.layout;state.panes=[...t.panes];
+  $('bName').value=t.name;
+  renderLayouts();renderPanes();generate();
+  document.getElementById('panes').scrollIntoView({behavior:'smooth',block:'start'});
+  toast('Loaded "'+t.n+'"');
+}
+function copyCmd(){
+  const text=$('output').textContent;
+  clip(text);
+  const b=$('copyBtn');b.classList.add('copied');b.innerHTML='Copied!';
+  setTimeout(()=>{b.classList.remove('copied');b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy'},1500);
+}
+function saveAlias(){
+  const text=$('output').textContent.split('\n')[0].trim();
+  const name=$('bName').value.trim()||'session';
+  clip(`alias ${name}="${text}"`);
+  toast('Alias copied — paste into ~/.bashrc or ~/.zshrc');
+}
+function saveScript(){
+  const text=$('output').textContent;
+  const name=$('bName').value.trim()||'session';
+  const script=`#!/usr/bin/env bash\n# tmux workspace: ${name}\n# generated by tmux Workstation Builder\nset -euo pipefail\n\n${text}\n`;
+  const blob=new Blob([script],{type:'text/x-shellscript'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='tmux-'+name+'.sh';a.click();URL.revokeObjectURL(a.href);
+  toast('Script downloaded');
+}
+
+/* ════════════════════════════════════════════
+   SAVED PROFILES (localStorage)
+   ════════════════════════════════════════════ */
+const STORE='tmux-profiles';
+function getProfiles(){try{return JSON.parse(localStorage.getItem(STORE)||'{}')}catch{return{}}}
+function putProfiles(p){localStorage.setItem(STORE,JSON.stringify(p))}
+function currentProfile(){
+  return{name:$('bName').value,path:$('bPath').value,layout:state.layout,panes:[...state.panes],detached:$('bDetached').checked,saved:new Date().toISOString()};
+}
+function saveProfile(){
+  const p=currentProfile();
+  const name=prompt('Save profile as:',p.name);if(!name)return;
+  const all=getProfiles();all[name]=p;putProfiles(all);
+  renderSaved();$('savedBox').classList.add('open');
+  toast('Saved "'+name+'"');
+}
+function loadProfile(name){
+  const p=getProfiles()[name];if(!p)return;
+  state.layout=p.layout;state.panes=[...p.panes];
+  $('bName').value=p.name;$('bPath').value=p.path;$('bDetached').checked=!!p.detached;
+  renderLayouts();renderPanes();generate();
+  toast('Loaded "'+name+'"');
+}
+function deleteProfile(name){
+  if(!confirm('Delete profile "'+name+'"?'))return;
+  const all=getProfiles();delete all[name];putProfiles(all);renderSaved();
+}
+function exportProfile(){
+  const p=currentProfile();
+  const blob=new Blob([JSON.stringify(p,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='tmux-'+p.name+'.json';a.click();URL.revokeObjectURL(a.href);
+  toast('Exported "'+p.name+'.json"');
+}
+function handleImport(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const p=JSON.parse(r.result);
+      if(!p.name||!Array.isArray(p.panes))throw 0;
+      state.layout=typeof p.layout==='number'?p.layout:1;state.panes=[...p.panes];
+      $('bName').value=p.name;$('bPath').value=p.path||'~/workspaces/project';$('bDetached').checked=!!p.detached;
+      renderLayouts();renderPanes();generate();
+      toast('Imported "'+p.name+'"');
+    }catch{toast('Invalid JSON file')}
+  };
+  r.readAsText(f);e.target.value='';
+}
+function toggleSaved(){$('savedBox').classList.toggle('open')}
+function renderSaved(){
+  const all=getProfiles();const keys=Object.keys(all);
+  $('savedCount').textContent=keys.length;
+  if(!keys.length){$('savedList').innerHTML='<div class="saved-empty">No saved profiles yet — click “Save current”.</div>';return}
+  $('savedList').innerHTML=keys.map(k=>{
+    const p=all[k];
+    const lay=LAYOUTS[p.layout>=0&&p.layout<LAYOUTS.length?p.layout:0];
+    const d=new Date(p.saved).toLocaleDateString();
+    return `<div class="saved-item">
+      <div class="info"><div class="nm">${esc(k)}</div>
+        <div class="mt">${lay.n} · ${p.panes.length} panes · ${d}</div></div>
+      <div class="btns">
+        <button class="btn sm" onclick="loadProfile('${esc(k)}')">Load</button>
+        <button class="btn sm ghost-danger" onclick="deleteProfile('${esc(k)}')">Delete</button>
+      </div></div>`;
+  }).join('');
+}
+
+/* ════════════════════════════════════════════
+   RENDER: keys
+   ════════════════════════════════════════════ */
+function renderKeys(){
+  $('keysContainer').innerHTML=KEY_SECTIONS.map(s=>`
+    <h2 class="kh" id="${s.id}" style="margin-top:32px">${s.n}</h2>
+    ${s.desc?`<p class="kdesc">${s.desc}</p>`:''}
+    <div class="kt">${s.rows.map(([k,v])=>`<div class="kr"><span class="k">${k.replace(/ /g,'&nbsp;')}</span><span class="v">${v}</span></div>`).join('')}</div>
+    ${s.hint?`<p class="khint">${s.hint}</p>`:''}
+  `).join('');
+}
+
+/* ════════════════════════════════════════════
+   RENDER: config
+   ════════════════════════════════════════════ */
+function highlightConf(code){
+  return esc(code)
+    .replace(/(^|\n)(\s*#.*)/g,(m,a,c)=>a+'<span class="cm">'+c+'</span>')
+    .replace(/(set-option|set-window-option|set|setw|bind|unbind|bind-key|source-file|run|run-shell|if-shell)\b/g,'<span style="color:var(--clay-d)">$1</span>')
+    .replace(/("[^"]*")/g,'<span class="st">$1</span>');
+}
+function renderConfig(){
+  $('cfgContainer').innerHTML=CONFIG_SECTIONS.map(s=>`
+    <div class="cfg" id="cfg-${s.id}">
+      <div class="cfg-h" onclick="toggleCfg('${s.id}',this)">
+        <span class="t">${s.n}</span>
+        <span class="a"><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></span>
+      </div>
+      <div class="cfg-bd">
+        <pre>${highlightConf(s.code)}</pre>
+        ${s.note?`<p class="note">${s.note}</p>`:''}
+        <button class="btn sm" style="margin-top:12px" onclick="copyCfg(this,'${s.id}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copy block
+        </button>
+      </div>
+    </div>`).join('');
+}
+function toggleCfg(id){$('cfg-'+id).classList.toggle('open')}
+function copyCfg(btn,id){
+  const sec=CONFIG_SECTIONS.find(s=>s.id===id);
+  clip(sec.code);
+  const orig=btn.innerHTML;btn.classList.add('copied');btn.innerHTML='Copied!';
+  setTimeout(()=>{btn.classList.remove('copied');btn.innerHTML=orig},1500);
+}
+
+/* ════════════════════════════════════════════
+   THEME & TABS
+   ════════════════════════════════════════════ */
+function syncThemeIcon(){
+  const dark=document.documentElement.classList.contains('dark');
+  $('iMoon').style.display=dark?'none':'';
+  $('iSun').style.display=dark?'':'none';
+}
+function toggleTheme(){
+  const dark=document.documentElement.classList.toggle('dark');
+  localStorage.setItem('tmux-theme',dark?'dark':'light');
+  syncThemeIcon();
+}
+$('tabs').addEventListener('click',e=>{
+  const b=e.target.closest('.tab');if(!b)return;
+  switchTab(b.dataset.p);
+});
+function switchTab(p){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.p===p));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.toggle('on',x.id==='p-'+p));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  if(e.altKey&&e.key==='1'){e.preventDefault();switchTab('builder')}
+  if(e.altKey&&e.key==='2'){e.preventDefault();switchTab('keys')}
+  if(e.altKey&&e.key==='3'){e.preventDefault();switchTab('config')}
+});
+
+/* ════════════════════════════════════════════
+   INIT
+   ════════════════════════════════════════════ */
+renderTemplates();
+renderSaved();
+renderLayouts();
+renderPanes();
+generate();
+renderKeys();
+renderConfig();
+syncThemeIcon();
+</script>
+</body>
+</html>

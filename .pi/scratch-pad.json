@@ -1,0 +1,7 @@
+[
+  {
+    "type": "scratch",
+    "key": "tmux-ref-redesign",
+    "value": "Current tmux-reference builder is at ~/workspaces/tmux-reference/index.html (848 lines). User wants full visual redesign via OD pipeline. Previous hand-coded vercel attempt \"looks bad\" — the OD-generated snippets had better styling. Need to get a complete working HTML file from od_design."
+  }
+]
