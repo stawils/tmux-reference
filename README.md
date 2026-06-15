@@ -2,7 +2,7 @@
 
 A single-file, dependency-free web tool for visually composing [tmux](https://github.com/tmux/tmux) workspace commands.
 
-**Live:** _add your GitHub Pages URL after enabling Pages (see below)._
+**Live:** https://stawils.github.io/tmux-reference/
 
 ## What it does
 
