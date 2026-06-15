@@ -130,7 +130,9 @@ final_layout() {
 # ── pane 0: initial pane (active) ──
 cmd0="${PANES_CLEAN[0]#"${PANES_CLEAN[0]%%[![:space:]]*}"}"  # ltrim
 if [[ $EXEC -eq 1 ]]; then
-  # exec mode: command becomes the new-session shell-command
+  # exec mode: command becomes the new-session shell-command (accurate pane_current_command
+  # so agents can verify each pane is running the expected app; a failed cmd closes the pane,
+  # which shows up as a missing pane in tmux list-panes)
   [[ -n "$cmd0" ]] && OUT+=" '$cmd0'"
 else
   [[ -n "$cmd0" ]] && OUT+=" \\; send-keys '$cmd0' Enter"

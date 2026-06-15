@@ -16,6 +16,15 @@
    - **Handing the command to a human:** run `/generate.sh` with defaults (non-detached) — one paste drops them straight into the session, no separate attach step.
    - **Launching it yourself in the background:** add `--detached 1 --exec`. `-d` backgrounds it; `--exec` runs each command as the pane process (100% reliable, no shell-prompt timing race). Then tell the user `tmux attach -t <name>`.
 5. **Return the command verbatim.** Run the generator's output as-is. Do NOT hand-edit it or append your own tmux commands (e.g. `select-layout`, `select-pane`) — the generator already handles pane arrangement, including tiling for 5+ panes and correct window sizing for detached sessions. If the result doesn't fit your needs, change the generator FLAGS (fewer panes, a different `--layout`) and regenerate, rather than rewriting the output.
+6. **CRITICAL — invoke project-local binaries via `npx` or `npm run`, not bare.** Tools installed as deps (`tsc`, `vite`, `eslint`, `jest`, `webpack`, `next`, `prettier`) live in `node_modules/.bin`, NOT on `$PATH`. A bare `tsc --watch` → `tsc: command not found` → the pane exits instantly. Use `npx tsc --noEmit --watch` or `npm run typecheck -- --watch`. Same for other languages: Python deps via `python -m pytest`, not bare `pytest` if it's a venv-local install.
+7. **VERIFY after launching — do not assume success.** A command that fails on startup (binary not found, port in use, bad flag) closes its pane instantly under `--exec`, and `renumber-windows` hides the evidence. Always run BOTH checks:
+   ```bash
+   # (a) pane COUNT must equal your --panes count (a missing pane = a failed command):
+   tmux list-panes -t <name> | wc -l
+   # (b) each pane is running the EXPECTED app (pane_current_command is accurate under --exec):
+   tmux list-panes -t <name> -F '#{pane_index}: #{pane_current_command}'
+   ```
+   If the count is low or a pane shows a shell instead of the intended app, a command failed — diagnose via `tmux capture-pane -t <name>:0.<i> -p` and fix the command (usually: add `npx`), then re-launch.
 
 That's the entire loop. No API keys, no auth, no server calls, no browser required.
 
