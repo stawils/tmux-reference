@@ -22,21 +22,21 @@ That's the entire loop. No API keys, no auth, no server calls, no browser requir
 
 # Quick path (no browser, no deps) — for curl/text agents
 
-The generated command is fully reproducible from a small bash script. Fetch it and run it:
+The generated command is fully reproducible from a small bash script. Fetch it and run it. **For programmatic/detached launch, add `--exec`** — it passes each command directly to tmux as the pane process, so it's 100% reliable with no shell-prompt timing race (this is the mode agents should use when actually launching):
 
 ```bash
 curl -s https://stawils.github.io/tmux-reference/generate.sh \
-  | bash -s -- --name dev --layout grid --detached 1 \
+  | bash -s -- --name dev --layout grid --detached 1 --exec \
      --panes "nvim .|cargo run|lazygit|cargo watch -x test"
 ```
 
 Outputs:
 ```
-tmux new-session -d -s dev -c ~/workspaces/project \; split-window -v ... \; send-keys -t 0 'nvim .' Enter ...
+tmux new-session -d -s dev -c ~/workspaces/project 'nvim .' \; split-window -v ... 'cargo run' \; select-layout tiled
 # tmux attach -t dev
 ```
 
-This is byte-identical to what the website generates in-browser. No Node, no Python, no browser automation — just `curl` + `bash`. Safe to read first: the script is ~120 lines of pure bash.
+This is byte-identical to what the website generates in-browser. No Node, no Python, no browser automation — just `curl` + `bash`. Safe to read first: the script is pure bash.
 
 | Flag | Default | Meaning |
 |---|---|---|
@@ -44,7 +44,10 @@ This is byte-identical to what the website generates in-browser. No Node, no Pyt
 | `--path` | `~/workspaces/project` | working directory |
 | `--layout` | `side-by-side` | alias or index 0–7 (see below) |
 | `--detached` | `1` | `1` adds `-d` (recommended); `0` attaches now |
+| `--exec` | off | **For agents:** pass commands as pane processes (reliable detached launch, no timing race). Without it, commands are `send-keys`'d to each pane's shell (natural for humans pasting into a live terminal; panes keep a shell after the command exits). |
 | `--panes` | `zsh` | pipe-separated commands: `--panes "nvim .|cargo run"` |
+
+**When to use `--exec`:** agents launching detached sessions programmatically → YES (reliable). Humans pasting into a terminal → leave it off (panes retain a shell). Tradeoff: with `--exec`, a pane closes when its command exits.
 
 ---
 

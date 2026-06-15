@@ -15,6 +15,7 @@ PATH_DIR="~/workspaces/project"
 LAYOUT="side-by-side"
 DETACHED=1
 PANES=""
+EXEC=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -23,8 +24,9 @@ while [[ $# -gt 0 ]]; do
     --layout)   LAYOUT="$2"; shift 2 ;;
     --detached) DETACHED="$2"; shift 2 ;;
     --panes)    PANES="$2"; shift 2 ;;
+    --exec)     EXEC=1; shift ;;      # shell-command passthrough (100% reliable, no timing)
     -h|--help)
-      sed -n '2,9p' "$0"; exit 0 ;;
+      sed -n '2,12p' "$0"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
 done
@@ -72,13 +74,18 @@ QNAME=$(quote_if_needed "$NAME")
 QPATH=$(quote_if_needed "$PATH_DIR")
 
 # ── build command (base-index agnostic: never addresses panes by index) ──
-# Strategy: send cmd0 to the initial pane, then for each additional pane do
-# split-window + send-keys to the now-active new pane. For grid/main shapes,
-# finish with select-layout. No select-pane -t N / send-keys -t N anywhere,
-# so it works under base-index 0 OR 1.
+# Two modes:
+#   default (--exec off): send-keys to each pane's shell. Natural for humans
+#     pasting into a live terminal; panes keep a shell after the command exits.
+#   --exec: pass each command as the new-session/split-window argument so tmux
+#     runs it AS the pane process. 100% reliable for programmatic/detached
+#     launch (no prompt-readiness race). Tradeoff: pane closes when cmd exits.
 OUT="tmux new-session"
 [[ "$DETACHED" =~ ^(1|true|yes|on)$ ]] && OUT+=" -d"
 OUT+=" -s $QNAME -c $QPATH"
+
+# helper: single-quote-escape a command for safe embedding
+sq() { local s="$1"; s="${s//\\/\\\\}"; s="${s//\'/\\\'\"\'\'\"}"; echo "$s"; }
 
 # split spec per layout: one spec PER LINE, for panes 1..N-1.
 # Each line is the full split-window options (e.g. "-h -p 38").
@@ -103,25 +110,29 @@ final_layout() {
   esac
 }
 
-# ── send cmd0 to the initial pane (active) ──
-first=1
-for cmd in "${PANES_CLEAN[@]}"; do
-  cmd_trimmed="${cmd#"${cmd%%[![:space:]]*}"}"  # ltrim
-  if [[ $first -eq 1 ]]; then
-    [[ -n "$cmd_trimmed" ]] && OUT+=" \\; send-keys '$cmd_trimmed' Enter"
-    first=0
-  fi
-done
+# ── pane 0: initial pane (active) ──
+cmd0="${PANES_CLEAN[0]#"${PANES_CLEAN[0]%%[![:space:]]*}"}"  # ltrim
+if [[ $EXEC -eq 1 ]]; then
+  # exec mode: command becomes the new-session shell-command
+  [[ -n "$cmd0" ]] && OUT+=" '$cmd0'"
+else
+  [[ -n "$cmd0" ]] && OUT+=" \\; send-keys '$cmd0' Enter"
+fi
 
-# ── split + send each remaining pane to the active pane ──
+# ── panes 1..N-1: split-window + (send-keys | shell-command) ──
 mapfile -t SPECS < <(split_spec "$LID" "$N")
 si=0
 for cmd in "${PANES_CLEAN[@]:1}"; do
   dir="${SPECS[$si]:--v}"   # default -v if spec runs out (extra panes)
   si=$((si+1))
-  OUT+=" \\; split-window $dir -c \"#{pane_current_path}\""
   cmd_trimmed="${cmd#"${cmd%%[![:space:]]*}"}"
-  [[ -n "$cmd_trimmed" ]] && OUT+=" \\; send-keys '$cmd_trimmed' Enter"
+  if [[ $EXEC -eq 1 ]]; then
+    OUT+=" \\; split-window $dir -c \"#{pane_current_path}\""
+    [[ -n "$cmd_trimmed" ]] && OUT+=" '$cmd_trimmed'"   # runs as pane process
+  else
+    OUT+=" \\; split-window $dir -c \"#{pane_current_path}\""
+    [[ -n "$cmd_trimmed" ]] && OUT+=" \\; send-keys '$cmd_trimmed' Enter"
+  fi
 done
 
 # ── final arrangement for grid / main shapes ──
