@@ -46,7 +46,7 @@ No build step. No dependencies. Nothing to install.
 
 ## Tech
 
-- Single `index.html` (~850 lines, ~47 KB)
+- Single `index.html` (~1096 lines, ~68 KB)
 - Vanilla HTML/CSS/JS — zero dependencies, zero external fonts, zero icon libraries
 - All icons are inline SVG
 - CSS custom properties for theming

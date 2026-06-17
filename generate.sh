@@ -100,8 +100,10 @@ if [[ "$DETACHED" =~ ^(1|true|yes|on)$ ]]; then
 fi
 OUT+=" -s $QNAME -c $QPATH"
 
-# helper: single-quote-escape a command for safe embedding
-sq() { local s="$1"; s="${s//\\/\\\\}"; s="${s//\'/\\\'\"\'\'\"}"; echo "$s"; }
+# helper: single-quote-escape a command for safe embedding in send-keys '...' or exec '...'
+# Canonical bash idiom: each literal ' becomes '"'"'
+# (end single-quote, double-quoted literal quote, restart single-quote)
+sq() { local s="$1"; s="${s//\'/\'\"\'\"\'}"; echo "$s"; }
 
 # split spec per layout: one spec PER LINE, for panes 1..N-1.
 # Each line is the full split-window options (e.g. "-h -p 38").
@@ -129,13 +131,14 @@ final_layout() {
 
 # ── pane 0: initial pane (active) ──
 cmd0="${PANES_CLEAN[0]#"${PANES_CLEAN[0]%%[![:space:]]*}"}"  # ltrim
+cmd0_sq=$(sq "$cmd0")
 if [[ $EXEC -eq 1 ]]; then
   # exec mode: command becomes the new-session shell-command (accurate pane_current_command
   # so agents can verify each pane is running the expected app; a failed cmd closes the pane,
   # which shows up as a missing pane in tmux list-panes)
-  [[ -n "$cmd0" ]] && OUT+=" '$cmd0'"
+  [[ -n "$cmd0" ]] && OUT+=" '$cmd0_sq'"
 else
-  [[ -n "$cmd0" ]] && OUT+=" \\; send-keys '$cmd0' Enter"
+  [[ -n "$cmd0" ]] && OUT+=" \\; send-keys '$cmd0_sq' Enter"
 fi
 
 # ── panes 1..N-1: split-window + (send-keys | shell-command) ──
@@ -145,12 +148,13 @@ for cmd in "${PANES_CLEAN[@]:1}"; do
   dir="${SPECS[$si]:--v}"   # default -v if spec runs out (extra panes)
   si=$((si+1))
   cmd_trimmed="${cmd#"${cmd%%[![:space:]]*}"}"
+  cmd_sq=$(sq "$cmd_trimmed")
   if [[ $EXEC -eq 1 ]]; then
     OUT+=" \\; split-window $dir -c \"#{pane_current_path}\""
-    [[ -n "$cmd_trimmed" ]] && OUT+=" '$cmd_trimmed'"   # runs as pane process
+    [[ -n "$cmd_trimmed" ]] && OUT+=" '$cmd_sq'"   # runs as pane process
   else
     OUT+=" \\; split-window $dir -c \"#{pane_current_path}\""
-    [[ -n "$cmd_trimmed" ]] && OUT+=" \\; send-keys '$cmd_trimmed' Enter"
+    [[ -n "$cmd_trimmed" ]] && OUT+=" \\; send-keys '$cmd_sq' Enter"
   fi
 done
 
