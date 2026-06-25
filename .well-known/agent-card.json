@@ -1,7 +1,7 @@
 {
   "name": "tmux Workstation Builder",
-  "description": "Composes a tmux workspace (layout + panes) into a ready-to-paste one-liner. Static site, no backend. State is set via URL query params, so an agent composes a link and hands it to the user.",
-  "version": "1.0",
+  "description": "Composes a tmux workspace (layout + panes) into a ready-to-paste one-liner. Static site, no backend. State is set via URL query params or the generate.sh bash script, so an agent composes a workspace and hands the result to the user.",
+  "version": "2.0",
   "url": "https://stawils.github.io/tmux-reference/",
   "protocol_version": "0.3",
   "capabilities": {
@@ -17,9 +17,18 @@
       "description": "Generate a tmux one-liner from layout + panes. RECOMMENDED path: fetch and run /generate.sh (pure bash, zero deps) — outputs the command to stdout. No browser needed.",
       "input": {
         "mode": "text",
-        "instructions": "curl -s https://stawils.github.io/tmux-reference/generate.sh | bash -s -- --name NAME --layout LAYOUT --panes 'cmd1|cmd2'",
+        "instructions": "curl -s https://stawils.github.io/tmux-reference/generate.sh | bash -s -- --name NAME --path . --layout LAYOUT --panes 'cmd1|cmd2'",
         "script_url": "https://stawils.github.io/tmux-reference/generate.sh",
-        "flags": {"--name": "session name", "--path": "working dir", "--layout": "alias or 0-7", "--detached": "1|0", "--panes": "pipe-separated commands"}
+        "flags": {
+          "--name": "session name (default: dev)",
+          "--path": "working dir (default: . — current dir; NEVER use a placeholder path)",
+          "--layout": "alias or 0-7 (default: side-by-side)",
+          "--detached": "1|0 — 1 adds -d (background, for agents); 0 drops user in (default: 0)",
+          "--exec": "flag (no value) — pass commands as pane processes (reliable for agents; no timing race)",
+          "--panes": "pipe-separated commands"
+        },
+        "agent_mode": "For agents launching in the background: add --detached 1 --exec. Then tell the user: tmux attach -t NAME",
+        "post_launch_verify": "After launching detached, verify: (1) tmux list-panes -t NAME | wc -l must equal your pane count, (2) tmux list-panes -t NAME -F '#{pane_index}: #{pane_current_command}' must show each pane running the expected app. A missing pane = a failed command."
       }
     },
     {
@@ -27,7 +36,7 @@
       "description": "Compose a tmux workspace as a URL (for humans or JS-capable agents). Returns a shareable URL.",
       "input": {
         "mode": "text",
-        "instructions": "Build a URL with query params: name, path, layout, detached, panes. Open it to read the generated command from element #output (requires JS)."
+        "instructions": "Build a URL with query params: name, path, layout, detached, exec, panes. Open it to read the generated command from element #output (requires JS)."
       }
     },
     {
@@ -35,7 +44,7 @@
       "description": "Discover available layouts, commands, and templates.",
       "input": {
         "mode": "text",
-        "instructions": "Fetch /options.json for the full structured catalogue, or /llms.txt for the human/agent-readable manual."
+        "instructions": "Fetch /options.json for the full structured catalogue (includes generate.sh flags and examples), or /llms.txt for the task-oriented agent manual."
       }
     }
   ],
@@ -45,5 +54,6 @@
   },
   "documentationUrl": "https://stawils.github.io/tmux-reference/llms.txt",
   "optionsUrl": "https://stawils.github.io/tmux-reference/options.json",
+  "generatorScript": "https://stawils.github.io/tmux-reference/generate.sh",
   "repository": "https://github.com/stawils/tmux-reference"
 }

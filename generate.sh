@@ -65,6 +65,11 @@ quote_if_needed() {
   local s="$1"
   # quote if it contains spaces or shell metacharacters
   if [[ "$s" =~ [[:space:]] || "$s" == *[\<\>\;\|\&\(\)\{\}\$\`\'\"\#]* ]]; then
+    # escape special chars inside double quotes
+    s="${s//\\/\\\\}"
+    s="${s//\$/\\\$}"
+    s="${s//\`/\\\`}"
+    s="${s//\"/\\\"}"
     echo "\"$s\""
   else
     echo "$s"

@@ -414,6 +414,7 @@ h2.kh{font-family:var(--serif);font-weight:500;font-size:20px;letter-spacing:-.0
     </div>
     <div class="toggles">
       <label class="toggle"><input type="checkbox" id="bDetached" onchange="generate()"> Detached (<code style="font-family:var(--mono);font-size:12px;color:var(--clay-d)">-d</code>)</label>
+      <label class="toggle"><input type="checkbox" id="bExec" onchange="generate()"> Exec mode (<code style="font-family:var(--mono);font-size:12px;color:var(--clay-d)">--exec</code>) <span style="font-size:11px;color:var(--gray-400)">commands as pane processes (for agents)</span></label>
     </div>
 
     <div class="section-lbl">Panes <span class="num" id="paneCount">2</span></div>
@@ -611,6 +612,8 @@ let state={layout:1,panes:['zsh','zsh']};
    ════════════════════════════════════════════ */
 const $=id=>document.getElementById(id);
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+/* escape for embedding inside single-quoted JS strings in onclick attributes */
+function jsq(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2000)}
 function clip(text){navigator.clipboard&&navigator.clipboard.writeText(text)}
 
@@ -692,25 +695,34 @@ function generate(){
   const name=$('bName').value.trim()||'session';
   const path=$('bPath').value.trim()||'.';
   const detached=$('bDetached').checked;
+  const exec=$('bExec')&&$('bExec').checked;
   const lid=state.layout;
   const n=state.panes.length;
   if(!n){$('output').innerHTML='';return}
 
   /* base-index agnostic: send to the active pane, split, send to the new active pane.
      Never addresses panes by absolute index, so works under base-index 0 or 1. */
-  let cmd='tmux new-session'+(detached?' -d':'')+' -s '+sh(name)+' -c '+sh(path);
+  let cmd='tmux new-session'+(detached?' -d -x 220 -y 56':'')+' -s '+sh(name)+' -c '+sh(path);
 
   /* cmd0 -> initial pane (active) */
-  if(state.panes[0]&&state.panes[0].trim())
-    cmd+=" \\; send-keys '"+state.panes[0].trim().replace(/'/g,"'\''")+"' Enter";
+  const t0=state.panes[0]?state.panes[0].trim():'';
+  if(exec){
+    if(t0) cmd+=" '"+sq(t0)+"'";
+  }else{
+    if(t0) cmd+=" \\; send-keys '"+sq(t0)+"' Enter";
+  }
 
-  /* interleaved: split-window + send-keys for panes 1..n-1 */
+  /* interleaved: split-window + (send-keys | shell-command) for panes 1..n-1 */
   const specs=splitSpec(lid,n);
   for(let i=1;i<n;i++){
     const dir=specs[i-1]||'-v';
     cmd+=' \\; split-window '+dir+' -c "#{pane_current_path}"';
     const t=state.panes[i]?state.panes[i].trim():'';
-    if(t) cmd+=" \\; send-keys '"+t.replace(/'/g,"'\''")+"' Enter";
+    if(exec){
+      if(t) cmd+=" '"+sq(t)+"'";
+    }else{
+      if(t) cmd+=" \\; send-keys '"+sq(t)+"' Enter";
+    }
   }
 
   /* grid / main-3 get a final select-layout */
@@ -720,7 +732,10 @@ function generate(){
   cmd+='\n<span class="cm"># tmux attach -t '+sh(name)+'</span>';
   $('output').innerHTML=cmd;
 }
-function sh(s){return /[\s<>;|&(){}$`'"#]/.test(s)?`"${s}"`:s}
+/* single-quote-escape a command for safe embedding in send-keys '...' or exec '...' */
+function sq(s){return String(s).replace(/'/g,"'\\''")}
+/* quote session name/path if it contains shell metacharacters */
+function sh(s){s=String(s);return /[\s<>;|&(){}$`'"#]/.test(s)?'"'+s.replace(/[\\$`"]/g,'\\$&')+'"':s}
 /* split options per pane (1..n-1), base-index agnostic */
 function splitSpec(lid,n){
   const h=Array(n-1).fill('-h'), v=Array(n-1).fill('-v');
@@ -816,7 +831,7 @@ const STORE='tmux-profiles';
 function getProfiles(){try{return JSON.parse(localStorage.getItem(STORE)||'{}')}catch{return{}}}
 function putProfiles(p){localStorage.setItem(STORE,JSON.stringify(p))}
 function currentProfile(){
-  return{name:$('bName').value,path:$('bPath').value,layout:state.layout,panes:[...state.panes],detached:$('bDetached').checked,saved:new Date().toISOString()};
+  return{name:$('bName').value,path:$('bPath').value,layout:state.layout,panes:[...state.panes],detached:$('bDetached').checked,exec:$('bExec')&&$('bExec').checked,saved:new Date().toISOString()};
 }
 function saveProfile(){
   const p=currentProfile();
@@ -829,6 +844,7 @@ function loadProfile(name){
   const p=getProfiles()[name];if(!p)return;
   state.layout=p.layout;state.panes=[...p.panes];
   $('bName').value=p.name;$('bPath').value=p.path;$('bDetached').checked=!!p.detached;
+  if($('bExec'))$('bExec').checked=!!p.exec;
   renderLayouts();renderPanes();generate();
   toast('Loaded "'+name+'"');
 }
@@ -851,6 +867,7 @@ function handleImport(e){
       if(!p.name||!Array.isArray(p.panes))throw 0;
       state.layout=typeof p.layout==='number'?p.layout:1;state.panes=[...p.panes];
       $('bName').value=p.name;$('bPath').value=p.path||'~/workspaces/project';$('bDetached').checked=!!p.detached;
+      if($('bExec'))$('bExec').checked=!!p.exec;
       renderLayouts();renderPanes();generate();
       toast('Imported "'+p.name+'"');
     }catch{toast('Invalid JSON file')}
@@ -870,8 +887,8 @@ function renderSaved(){
       <div class="info"><div class="nm">${esc(k)}</div>
         <div class="mt">${lay.n} · ${p.panes.length} panes · ${d}</div></div>
       <div class="btns">
-        <button class="btn sm" onclick="loadProfile('${esc(k)}')">Load</button>
-        <button class="btn sm ghost-danger" onclick="deleteProfile('${esc(k)}')">Delete</button>
+        <button class="btn sm" onclick="loadProfile('${jsq(k)}')">Load</button>
+        <button class="btn sm ghost-danger" onclick="deleteProfile('${jsq(k)}')">Delete</button>
       </div></div>`;
   }).join('');
 }
@@ -993,6 +1010,8 @@ function applyParams(){
   if(q.has('path')&&q.get('path')!=='')$('bPath').value=q.get('path');
   const d=q.get('detached')||q.get('d');
   if(d!==null)$('bDetached').checked=/^(1|true|yes|on)$/i.test(d);
+  const exec=q.get('exec')||q.get('e');
+  if(exec!==null&&$('bExec'))$('bExec').checked=/^(1|true|yes|on)$/i.test(exec);
   return true;
 }
 function buildShareUrl(){
@@ -1001,6 +1020,7 @@ function buildShareUrl(){
   q.set('path',$('bPath').value);
   q.set('layout',LAY_ALIASES_REV[state.layout]||state.layout);
   q.set('detached',$('bDetached').checked?'1':'0');
+  if($('bExec')&&$('bExec').checked)q.set('exec','1');
   if(state.panes.length)q.set('panes',state.panes.join('|'));
   return location.origin+location.pathname+'?'+q.toString();
 }
@@ -1021,13 +1041,6 @@ renderTemplates();
 renderSaved();
 renderLayouts();
 renderPanes();
-renderKeys();
-renderConfig();
-syncThemeIcon();
-renderSaved();
-renderLayouts();
-renderPanes();
-generate();
 renderKeys();
 renderConfig();
 syncThemeIcon();
@@ -1059,17 +1072,19 @@ if('modelContext' in navigator){
             path:{type:'string',description:'working directory',default:'~/workspaces/project'},
             layout:{type:'string',description:'layout alias or index',default:'side-by-side'},
             detached:{type:'boolean',description:'add -d flag (recommended)',default:true},
+            exec:{type:'boolean',description:'run commands as pane processes (--exec mode, for agents: reliable detached launch, no timing race)',default:false},
             panes:{type:'array',items:{type:'string'},description:'command for each pane, in order'}
           },
           required:['panes']
         },
-        execute:({name='dev',path='~/workspaces/project',layout='side-by-side',detached=true,panes})=>{
+        execute:({name='dev',path='~/workspaces/project',layout='side-by-side',detached=true,exec=false,panes})=>{
           const idx=resolveLayout(layout);if(idx!==null)state.layout=idx;
           state.panes=panes&&panes.length?panes:['zsh'];
           $('bName').value=name;$('bPath').value=path;$('bDetached').checked=detached;
+          if($('bExec'))$('bExec').checked=exec;
           renderLayouts();renderPanes();generate();
           const url=buildShareUrl();
-          return{content:[{type:'text',text:JSON.stringify({command:$('output').textContent,url:url,sessions:name},null,2)}]};
+          return{content:[{type:'text',text:JSON.stringify({command:$('output').textContent,url:url,session:name},null,2)}]};
         }
       },
       {

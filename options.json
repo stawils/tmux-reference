@@ -1,21 +1,38 @@
 {
   "tool": "tmux Workstation Builder",
-  "version": 1,
-  "description": "Turns a pane layout into a ready-to-paste tmux one-liner. Static page, no backend. State is set entirely via URL query params.",
+  "version": 2,
+  "description": "Turns a pane layout into a ready-to-paste tmux one-liner. Static page, no backend. State is set entirely via URL query params or the generate.sh bash script.",
   "base_url": "https://stawils.github.io/tmux-reference/",
   "manual": "https://stawils.github.io/tmux-reference/llms.txt",
-  "how_to_read_result": "Open the composed URL in a browser; the generated tmux command appears in the element with id=\"output\". If you run JS (headless browser), read document.getElementById('output').textContent after load.",
+  "recommended_agent_path": "https://stawils.github.io/tmux-reference/generate.sh (pure bash, zero deps — fetch and run, command goes to stdout)",
+  "how_to_read_result": "Via generate.sh (RECOMMENDED for agents): the command is printed to stdout. Via the website (JS-capable agents): open the composed URL, read document.getElementById('output').textContent after load.",
 
   "url_scheme": {
     "summary": "GET base_url with any of these query params (all optional). Panes are pipe-separated; encode spaces as + or %20.",
     "params": {
       "name":    { "type": "string", "default": "dev", "desc": "tmux session name" },
-      "path":    { "type": "string", "default": "~/workspaces/project", "desc": "working directory passed to tmux -c" },
+      "path":    { "type": "string", "default": "~/workspaces/project", "desc": "working directory passed to tmux -c. Use --path . for current directory if you don't know the real path." },
       "layout":  { "type": "string|int", "default": "side-by-side", "desc": "index 0-7 or alias (see layouts[].alias below)" },
       "detached":{ "type": "bool",   "default": true, "desc": "1/true/on adds -d (recommended); 0 attaches immediately" },
+      "exec":    { "type": "bool",   "default": false, "desc": "1/true/on runs commands as pane processes (--exec mode: reliable for agents, no timing race). Without it, commands are send-keys'd to each pane's shell." },
       "panes":   { "type": "string", "default": "zsh", "desc": "commands for each pane, pipe-separated: panes=nvim+.|cargo+run" },
       "pane0..pane11": { "type": "string", "desc": "alternative: pass panes individually as pane0=...&pane1=..." }
     }
+  },
+
+  "generate_sh": {
+    "url": "https://stawils.github.io/tmux-reference/generate.sh",
+    "desc": "Pure-bash generator — mirrors the client-side logic. curl it, run it, read stdout. No browser, no Node, no Python.",
+    "flags": {
+      "--name":     "tmux session name (default: dev)",
+      "--path":     "working directory (default: . — current dir)",
+      "--layout":   "alias or index 0-7 (default: side-by-side)",
+      "--detached": "1 adds -d (background); 0 drops you in (default: 0)",
+      "--exec":     "pass commands as pane processes (100% reliable for agents)",
+      "--panes":    "pipe-separated commands (default: zsh)"
+    },
+    "example_human": "curl -s https://stawils.github.io/tmux-reference/generate.sh | bash -s -- --name dev --layout grid --panes \"nvim .|cargo run|lazygit|cargo watch -x test\"",
+    "example_agent": "curl -s https://stawils.github.io/tmux-reference/generate.sh | bash -s -- --name dev --layout grid --detached 1 --exec --panes \"nvim .|cargo run|lazygit|cargo watch -x test\""
   },
 
   "resend_template": "https://stawils.github.io/tmux-reference/?name={name}&path={path}&layout={layout}&detached=1&panes={pane0}|{pane1}|{pane2}",

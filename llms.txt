@@ -57,7 +57,7 @@ No Node, no Python, no browser automation — just `curl` + `bash`. Safe to read
 | Flag | Default | Meaning |
 |---|---|---|
 | `--name` | `dev` | tmux session name |
-| `--path` | `~/workspaces/project` | working directory |
+| `--path` | `.` | working directory (default: current dir; agents should detect the real project path and pass it) |
 | `--layout` | `side-by-side` | alias or index 0–7 (see below) |
 | `--detached` | `0` | `1` adds `-d` (background — agents use this + `--exec`); `0` (default) drops you straight into the session in one command (best for humans pasting into a terminal) |
 | `--exec` | off | **For agents:** pass commands as pane processes (reliable detached launch, no timing race). Without it, commands are `send-keys`'d to each pane's shell (natural for humans pasting into a live terminal; panes keep a shell after the command exits). |
@@ -77,6 +77,7 @@ Append query params to the base URL. All optional; any subset works.
 | `path` | string | `~/workspaces/project` | working directory (`tmux -c`) |
 | `layout` | alias or 0–7 | `side-by-side` | pane arrangement (see below) |
 | `detached` | bool | `1` | `1`/`true`/`on` adds `-d` (recommended); `0` attaches now |
+| `exec` | bool | `0` | `1`/`true`/`on` runs commands as pane processes (reliable for agents, no timing race) |
 | `panes` | string | `zsh` | pipe-separated commands: `panes=nvim+.|cargo+run` |
 | `pane0` `pane1` … | string | — | alternative: one param per pane |
 

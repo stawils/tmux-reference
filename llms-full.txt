@@ -7,7 +7,7 @@ Base URL: https://stawils.github.io/tmux-reference/
 
 # tmux Workstation Builder
 
-> You (an AI agent) landed here. This file is your operating manual — read it, then act. The site turns a pane layout into a ready-to-paste `tmux` command. There is no backend; the whole interface is URL query parameters. Your job: compose a URL and hand it to the user.
+> You (an AI agent) landed here. This file is your operating manual — read it, then act. **Do NOT hand-write a tmux command from memory.** tmux split semantics are error-prone (the active pane after `split-window` is the new one, not the original; `base-index`/`pane-base-index` shift all indices; `select-pane -t N` breaks under `base-index 1`; quote escaping in `send-keys` is fiddly). The generator below handles all of this correctly. Your job: run `/generate.sh`, hand the output to the user.
 
 **Live URL:** https://stawils.github.io/tmux-reference/
 **Source:** https://github.com/stawils/tmux-reference
@@ -17,16 +17,64 @@ Base URL: https://stawils.github.io/tmux-reference/
 # Your task
 
 1. **Understand what the user wants** (a dev workspace? monitoring? multi-ssh?).
-2. **Explore the options** below (or fetch `/options.json` for the structured catalogue).
-3. **Compose a URL** using the scheme in "How to act".
-4. **Return the URL** to the user — opening it shows the generated command, ready to copy.
-5. *(Optional)* If you can run JS in a headless browser, open the URL and read `document.getElementById('output').textContent` to return the command text directly.
+2. **CRITICAL — set `--path` to a REAL directory.** Detect the user's project path: run `pwd`, `ls ~/workspaces/`, or look for the repo they named. **Never emit a placeholder path** like `~/workspaces/project` — tmux `-c` to a nonexistent dir creates the session with a broken working directory (panes land in `/` or silently fail). If you genuinely don't know the path, use `--path .` (current directory) OR ask the user before generating. Do not hand the user a command with a path you haven't verified exists.
+3. **Explore the options** below (or fetch `/options.json` for the structured catalogue).
+4. **Generate the command** — you have two paths (pick by what you're doing):
+   - **Handing the command to a human:** run `/generate.sh` with defaults (non-detached) — one paste drops them straight into the session, no separate attach step.
+   - **Launching it yourself in the background:** add `--detached 1 --exec`. `-d` backgrounds it; `--exec` runs each command as the pane process (100% reliable, no shell-prompt timing race). Then tell the user `tmux attach -t <name>`.
+5. **Return the command verbatim.** Run the generator's output as-is. Do NOT hand-edit it or append your own tmux commands (e.g. `select-layout`, `select-pane`) — the generator already handles pane arrangement, including tiling for 5+ panes and correct window sizing for detached sessions. If the result doesn't fit your needs, change the generator FLAGS (fewer panes, a different `--layout`) and regenerate, rather than rewriting the output.
+6. **CRITICAL — invoke project-local binaries via `npx` or `npm run`, not bare.** Tools installed as deps (`tsc`, `vite`, `eslint`, `jest`, `webpack`, `next`, `prettier`) live in `node_modules/.bin`, NOT on `$PATH`. A bare `tsc --watch` → `tsc: command not found` → the pane exits instantly. Use `npx tsc --noEmit --watch` or `npm run typecheck -- --watch`. Same for other languages: Python deps via `python -m pytest`, not bare `pytest` if it's a venv-local install.
+7. **VERIFY after launching — do not assume success.** A command that fails on startup (binary not found, port in use, bad flag) closes its pane instantly under `--exec`, and `renumber-windows` hides the evidence. Always run BOTH checks:
+   ```bash
+   # (a) pane COUNT must equal your --panes count (a missing pane = a failed command):
+   tmux list-panes -t <name> | wc -l
+   # (b) each pane is running the EXPECTED app (pane_current_command is accurate under --exec):
+   tmux list-panes -t <name> -F '#{pane_index}: #{pane_current_command}'
+   ```
+   If the count is low or a pane shows a shell instead of the intended app, a command failed — diagnose via `tmux capture-pane -t <name>:0.<i> -p` and fix the command (usually: add `npx`), then re-launch.
 
-That's the entire loop. No API keys, no auth, no server calls.
+That's the entire loop. No API keys, no auth, no server calls, no browser required.
 
 ---
 
-# How to act — the URL interface
+# Quick path (no browser, no deps) — for curl/text agents
+
+The generated command is fully reproducible from a small bash script. Fetch it and run it.
+
+**Two modes — pick by what you're doing:**
+
+- **Handing the command to a HUMAN** (default): drop the flags. Output is a single command that creates the session AND drops them straight in (no separate attach step):
+  ```bash
+  curl -s https://stawils.github.io/tmux-reference/generate.sh \
+    | bash -s -- --name dev --layout grid \
+       --panes "nvim .|cargo run|lazygit|cargo watch -x test"
+  ```
+  → `tmux new-session -s dev -c . 'nvim .' \; split-window ...` (one paste, they're in)
+
+- **Launching programmatically / in the background** (agent run-it-yourself): add `--detached 1 --exec`. `-d` backgrounds it; `--exec` runs each command as the pane process (100% reliable, no shell-prompt timing race):
+  ```bash
+  curl -s https://stawils.github.io/tmux-reference/generate.sh \
+    | bash -s -- --name dev --layout grid --detached 1 --exec \
+       --panes "nvim .|cargo run|lazygit|cargo watch -x test"
+  ```
+  → `tmux new-session -d -s dev -c . 'nvim .' \; ...` then tell the user `tmux attach -t dev`
+
+No Node, no Python, no browser automation — just `curl` + `bash`. Safe to read first: the script is pure bash.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--name` | `dev` | tmux session name |
+| `--path` | `.` | working directory (default: current dir; agents should detect the real project path and pass it) |
+| `--layout` | `side-by-side` | alias or index 0–7 (see below) |
+| `--detached` | `0` | `1` adds `-d` (background — agents use this + `--exec`); `0` (default) drops you straight into the session in one command (best for humans pasting into a terminal) |
+| `--exec` | off | **For agents:** pass commands as pane processes (reliable detached launch, no timing race). Without it, commands are `send-keys`'d to each pane's shell (natural for humans pasting into a live terminal; panes keep a shell after the command exits). |
+| `--panes` | `zsh` | pipe-separated commands: `--panes "nvim .|cargo run"` |
+
+**When to use `--exec`:** agents launching detached sessions programmatically → YES (reliable). Humans pasting into a terminal → leave it off (panes retain a shell). Tradeoff: with `--exec`, a pane closes when its command exits.
+
+---
+
+# URL path — for humans or JS-capable agents
 
 Append query params to the base URL. All optional; any subset works.
 
@@ -36,6 +84,7 @@ Append query params to the base URL. All optional; any subset works.
 | `path` | string | `~/workspaces/project` | working directory (`tmux -c`) |
 | `layout` | alias or 0–7 | `side-by-side` | pane arrangement (see below) |
 | `detached` | bool | `1` | `1`/`true`/`on` adds `-d` (recommended); `0` attaches now |
+| `exec` | bool | `0` | `1`/`true`/`on` runs commands as pane processes (reliable for agents, no timing race) |
 | `panes` | string | `zsh` | pipe-separated commands: `panes=nvim+.|cargo+run` |
 | `pane0` `pane1` … | string | — | alternative: one param per pane |
 
@@ -103,7 +152,9 @@ https://stawils.github.io/tmux-reference/?name=servers&layout=3col&panes=ssh+web
 
 # How to read the result
 
-After a URL is opened, the generated `tmux` one-liner lives in the element with `id="output"` (a `<pre>` tag). It contains the command followed by a commented attach line:
+**Via the bash script (no browser):** the command is printed directly to stdout — nothing to extract. This is the reliable path for text/curl agents.
+
+**Via the website (JS-capable agents only):** the generated `tmux` one-liner lives in the element with `id="output"` (a `<pre>` tag):
 
 ```
 tmux new-session -d -s app -c ~/workspaces/app \; split-window -h ... \; send-keys -t 0 'nvim .' Enter ...
@@ -122,6 +173,7 @@ const cmd = document.getElementById('output').textContent;
 
 Different agents look in different places. We expose several so any agent type can find us:
 
+- **`/generate.sh`** — pure-bash generator (RECOMMENDED for curl/text agents; zero deps)
 - **`/llms.txt`** — this file (text-based agents: Claude, ChatGPT)
 - **`/options.json`** — the same options as structured JSON (API-calling agents)
 - **`/.well-known/agent-card.json`** — A2A Agent Card (MCP / A2A clients)
@@ -143,25 +195,40 @@ The page also has two reference tabs you may find useful:
 ```json
 {
   "tool": "tmux Workstation Builder",
-  "version": 1,
-  "description": "Turns a pane layout into a ready-to-paste tmux one-liner. Static page, no backend. State is set entirely via URL query params.",
+  "version": 2,
+  "description": "Turns a pane layout into a ready-to-paste tmux one-liner. Static page, no backend. State is set entirely via URL query params or the generate.sh bash script.",
   "base_url": "https://stawils.github.io/tmux-reference/",
   "manual": "https://stawils.github.io/tmux-reference/llms.txt",
-  "how_to_read_result": "Open the composed URL in a browser; the generated tmux command appears in the element with id=\"output\". If you run JS (headless browser), read document.getElementById('output').textContent after load.",
+  "recommended_agent_path": "https://stawils.github.io/tmux-reference/generate.sh (pure bash, zero deps — fetch and run, command goes to stdout)",
+  "how_to_read_result": "Via generate.sh (RECOMMENDED for agents): the command is printed to stdout. Via the website (JS-capable agents): open the composed URL, read document.getElementById('output').textContent after load.",
 
   "url_scheme": {
     "summary": "GET base_url with any of these query params (all optional). Panes are pipe-separated; encode spaces as + or %20.",
     "params": {
       "name":    { "type": "string", "default": "dev", "desc": "tmux session name" },
-      "path":    { "type": "string", "default": "~/workspaces/project", "desc": "working directory passed to tmux -c" },
+      "path":    { "type": "string", "default": "~/workspaces/project", "desc": "working directory passed to tmux -c. Use --path . for current directory if you don't know the real path." },
       "layout":  { "type": "string|int", "default": "side-by-side", "desc": "index 0-7 or alias (see layouts[].alias below)" },
       "detached":{ "type": "bool",   "default": true, "desc": "1/true/on adds -d (recommended); 0 attaches immediately" },
+      "exec":    { "type": "bool",   "default": false, "desc": "1/true/on runs commands as pane processes (--exec mode: reliable for agents, no timing race). Without it, commands are send-keys'd to each pane's shell." },
       "panes":   { "type": "string", "default": "zsh", "desc": "commands for each pane, pipe-separated: panes=nvim+.|cargo+run" },
       "pane0..pane11": { "type": "string", "desc": "alternative: pass panes individually as pane0=...&pane1=..." }
     }
   },
 
-  "resend_template": "https://stawils.github.io/tmux-reference/?name={name}&path={path}&layout={layout}&detached=1&panes={pane0}|{pane1}|{pane2}",
+  "generate_sh": {
+    "url": "https://stawils.github.io/tmux-reference/generate.sh",
+    "desc": "Pure-bash generator — mirrors the client-side logic. curl it, run it, read stdout. No browser, no Node, no Python.",
+    "flags": {
+      "--name":     "tmux session name (default: dev)",
+      "--path":     "working directory (default: . — current dir)",
+      "--layout":   "alias or index 0-7 (default: side-by-side)",
+      "--detached": "1 adds -d (background); 0 drops you in (default: 0)",
+      "--exec":     "pass commands as pane processes (100% reliable for agents)",
+      "--panes":    "pipe-separated commands (default: zsh)"
+    },
+    "example_human": "curl -s https://stawils.github.io/tmux-reference/generate.sh | bash -s -- --name dev --layout grid --panes \"nvim .|cargo run|lazygit|cargo watch -x test\"",
+    "example_agent": "curl -s https://stawils.github.io/tmux-reference/generate.sh | bash -s -- --name dev --layout grid --detached 1 --exec --panes \"nvim .|cargo run|lazygit|cargo watch -x test\""
+  },
 
   "layouts": [
     { "index": 0, "alias": "single",          "name": "Single",        "panes": 1 },
@@ -195,7 +262,6 @@ The page also has two reference tabs you may find useful:
     { "name": "Simple split",  "session": "work",     "layout": "side-by-side", "panes": ["zsh", "zsh"],                                           "desc": "Two plain shells." }
   ]
 }
-
 ```
 
 ---
@@ -203,7 +269,58 @@ The page also has two reference tabs you may find useful:
 
 Prefix is `Ctrl+a` (shown below as `⌈`).
 
+## Windows
+- `⌈ c` — New window
+- `⌈ ,` — Rename window
+- `⌈ &` — Kill window
+- `Tab` — Toggle last window
+- `⌈ < / >` — Swap window left / right
+- `Alt+1–9` — Jump to window N
+- `Alt+← / →` — Previous / next window
+
+## Panes
+- `⌈ |` — Split vertical (left/right)
+- `⌈ -` — Split horizontal (top/bottom)
+- `⌈ h / j / k / l` — Navigate panes (vim)
+- `Alt+← ↑ ↓ →` — Navigate (no prefix)
+- `⌈ H / J / K / L` — Resize by 5 (repeat)
+- `⌈ z` — Zoom / unzoom pane
+- `⌈ x` — Kill pane
+- `⌈ < / >` — Swap pane
+
+## Sessions
+- `⌈ S` — New session (prompt)
+- `⌈ $` — Rename session
+- `⌈ ( / )` — Previous / next session
+- `⌈ d` — Detach
+- `⌈ ⌈` — Send literal prefix (nested tmux)
+- CLI: `tmux ls` · `tmux attach -t name` · `tmux kill-session -t name`
+
+## Copy mode
+- `v` — Begin selection
+- `Ctrl+v` — Rectangle toggle
+- `y / Enter` — Copy & exit
+- `Escape` — Cancel
+- `H / L` — Start / end of line
+- `K / J` — Half page up / down
+- `⌈ p` — Paste from clipboard
+
+## Layouts
+- `⌈ M-1` — Even horizontal
+- `⌈ M-2` — Even vertical
+- `⌈ M-3` — Main horizontal
+- `⌈ M-4` — Main vertical
+- `⌈ M-5` — Tiled
+- `Space` — Cycle layouts
+
+## Misc
+- `⌈ r` — Reload config
+- `⌈ e` — Open config in $EDITOR
+- `⌈ ?` — List all bindings
+- `⌈ t` — Big clock
+- `⌈ :` — Command prompt
+
+---
 # Section 4: tmux.conf snippets
 
 Drop any block into ~/.tmux.conf and reload with `tmux source-file ~/.tmux.conf`.
-
